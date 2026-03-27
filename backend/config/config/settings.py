@@ -32,6 +32,13 @@ DEBUG = True
 ALLOWED_HOSTS = []
 
 
+# Самая важная настройка для подключения к фронтенду!
+# Разрешаем запросы с localhost:3000 (где работает React-dev-сервер)
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -60,6 +67,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 
+    'corsheaders.middleware.CorsMiddleware',
     'cart.middleware.CartMiddleware',
 ]
 
