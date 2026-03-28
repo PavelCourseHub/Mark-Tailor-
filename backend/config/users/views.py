@@ -1,107 +1,166 @@
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth import login, authenticate, logout
-from django.contrib.auth.decorators import login_required
-from django.urls import reverse
-from django.http import HttpResponse
-from django.template.response import TemplateResponse
-from .forms import CustomUserCreationForm, CustomUserLoginForm, \
-    CustomUserUpdateForm
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from django.contrib.auth import login, logout
+from django.shortcuts import get_object_or_404
+from django.db import transaction
+
+from .serializers import (
+    UserRegistrationSerializer,
+    UserLoginSerializer,
+    UserUpdateSerializer,
+    UserSerializer,
+    ProductSerializer,
+    OrderSerializer
+)
 from .models import CustomUser
-from django.contrib import messages
 from main.models import Product
 from orders.models import Order
 
 
-def register(request):
-    if request.method == 'POST':
-        form = CustomUserCreationForm(request.POST)
-        if form.is_valid():
-            user = form.save()
+class RegisterView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = UserRegistrationSerializer(data=request.data)
+        if serializer.is_valid():
+            with transaction.atomic():
+                user = serializer.save()
+                login(request, user, backend='django.contrib.auth.backends.ModelBackend')
+                
+                return Response({
+                    'message': 'User created successfully',
+                    'user': UserSerializer(user).data
+                }, status=status.HTTP_201_CREATED)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class LoginView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = UserLoginSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            user = serializer.validated_data['user']
             login(request, user, backend='django.contrib.auth.backends.ModelBackend')
-            return redirect('main:index')
-    else:
-        form = CustomUserCreationForm()
-    return render(request, 'users/register.html', {'form': form})
+            
+            return Response({
+                'message': 'Login successful',
+                'user': UserSerializer(user).data
+            }, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-def login_view(request):
-    if request.method == 'POST':
-        form = CustomUserLoginForm(request=request, data=request.POST)
-        if form.is_valid():
-            user = form.get_user()
-            login(request, user, backend='django.contrib.auth.backends.ModelBackend')
-            return redirect('main:index')
-    else:
-        form = CustomUserLoginForm()
-    return render(request, 'users/login.html', {'form': form})
-    
+class ProfileView(APIView):
+    permission_classes = [IsAuthenticated]
 
-@login_required(login_url='/users/login')
-def profile_view(request):
-    if request.method == 'POST':
-        form = CustomUserUpdateForm(request.POST, instance=request.user)
-        if form.is_valid():
-            form.save()
-            if request.headers.get("HX-Request"):
-                return HttpResponse(headers={'HX-Redirect': reverse('users:profile')})
-            return redirect('users:profile')
-    else:
-        form = CustomUserUpdateForm(instance=request.user)
+    def get(self, request):
+        user = request.user
+        recommended_products = Product.objects.all().order_by('id')[:3]
+        
+        return Response({
+            'user': UserSerializer(user).data,
+            'recommended_products': ProductSerializer(recommended_products, many=True).data
+        })
 
-    recommended_products = Product.objects.all().order_by('id')[:3]
+    def put(self, request):
+        serializer = UserUpdateSerializer(instance=request.user, data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            return Response({
+                'message': 'Profile updated successfully',
+                'user': UserSerializer(user).data
+            }, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    return TemplateResponse(request, 'users/profile.html', {
-        'form': form,
-        'user': request.user,
-        'recommended_products': recommended_products
-    })
-
-
-@login_required(login_url='/users/login')
-def account_details(request):
-    user = CustomUser.objects.get(id=request.user.id)
-    return TemplateResponse(request, 'users/partials/account_details.html', {'user': user})
+    def patch(self, request):
+        serializer = UserUpdateSerializer(instance=request.user, data=request.data, partial=True)
+        if serializer.is_valid():
+            user = serializer.save()
+            return Response({
+                'message': 'Profile updated successfully',
+                'user': UserSerializer(user).data
+            }, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-@login_required(login_url='/users/login')
-def edit_account_details(request):
-    form = CustomUserUpdateForm(instance=request.user)
-    return TemplateResponse(request, 'users/partials/edit_account_details.html',
-                            {'user': request.user, 'form': form})
+class AccountDetailsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        return Response(UserSerializer(user).data)
 
 
-@login_required(login_url='/users/login')
-def update_account_details(request):
-    if request.method == 'POST':
-        form = CustomUserUpdateForm(request.POST, instance=request.user)
-        if form.is_valid():
-            user = form.save(commit=False)
-            user.clean()
-            user.save()
-            updated_user = CustomUser.objects.get(id=user.id)
-            request.user = updated_user
-            if request.headers.get('HX-Request'):
-                return TemplateResponse(request, 'users/partials/account_details.html', {'user': updated_user})
-            return TemplateResponse(request, 'users/partials/account_details.html', {'user': updated_user})
-        else:
-            return TemplateResponse(request, 'users/partials/edit_account_details.html', {'user': request.user, 'form': form})
-    if request.headers.get('HX-Request'):
-        return HttpResponse(headers={'HX-Redirect': reverse('user:profile')})
-    return redirect('users:profile')
+class EditAccountDetailsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        return Response(UserUpdateSerializer(user).data)
 
 
-def logout_view(request):
-    logout(request)
-    if request.headers.get('HX-Request'):
-        return HttpResponse(headers={'HX-Redirect': reverse('main:index')})
-    return redirect('main:index')
+class UpdateAccountDetailsView(APIView):
+    permission_classes = [IsAuthenticated]
 
-@login_required
-def order_history(request):
-    orders = Order.objects.filter(user=request.user).order_by('-created_at')
-    return TemplateResponse(request, 'users/partials/order_history.html', {'orders': orders})
+    def put(self, request):
+        serializer = UserUpdateSerializer(instance=request.user, data=request.data)
+        if serializer.is_valid():
+            with transaction.atomic():
+                user = serializer.save()
+                # Обновляем request.user
+                request.user.refresh_from_db()
+                
+                return Response({
+                    'message': 'Account details updated successfully',
+                    'user': UserSerializer(user).data
+                }, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-@login_required
-def order_detail(request, order_id):
-    order = get_object_or_404(Order, id=order_id, user=request.user)
-    return TemplateResponse(request, 'users/partials/order_detail.html', {'order': order})
+    def patch(self, request):
+        serializer = UserUpdateSerializer(instance=request.user, data=request.data, partial=True)
+        if serializer.is_valid():
+            with transaction.atomic():
+                user = serializer.save()
+                request.user.refresh_from_db()
+                
+                return Response({
+                    'message': 'Account details updated successfully',
+                    'user': UserSerializer(user).data
+                }, status=status.HTTP_200_OK)
+        
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class LogoutView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        logout(request)
+        return Response({
+            'message': 'Logout successful'
+        }, status=status.HTTP_200_OK)
+
+
+class OrderHistoryView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        orders = Order.objects.filter(user=request.user).order_by('-created_at')
+        serializer = OrderSerializer(orders, many=True)
+        return Response(serializer.data)
+
+
+class OrderDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, order_id):
+        order = get_object_or_404(Order, id=order_id, user=request.user)
+        serializer = OrderSerializer(order)
+        return Response(serializer.data)

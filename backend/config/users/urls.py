@@ -1,16 +1,24 @@
 from django.urls import path
-from . import views
-
-app_name = 'users'
+from .views import (
+    RegisterView,
+    LoginView,
+    ProfileView,
+    AccountDetailsView,
+    EditAccountDetailsView,
+    UpdateAccountDetailsView,
+    LogoutView,
+    OrderHistoryView,
+    OrderDetailView
+)
 
 urlpatterns = [
-    path('register/', views.register, name='register'),
-    path('login/', views.login_view, name='login'),
-    path('profile/', views.profile_view, name='profile'),
-    path('account-details/', views.account_details, name='account_details'),
-    path('edit-account-details/', views.edit_account_details, name='edit_account_details'),
-    path('update-account-details/', views.update_account_details, name='update_account_details'),
-    path('logout/', views.logout, name='logout'),
-    path('order-history/', views.order_history, name='order_history'),
-    path('order/<int:order_id>/', views.order_detail, name='order_detail'),
+    path('api/register/', RegisterView.as_view(), name='api_register'),
+    path('api/login/', LoginView.as_view(), name='api_login'),
+    path('api/logout/', LogoutView.as_view(), name='api_logout'),
+    path('api/profile/', ProfileView.as_view(), name='api_profile'),
+    path('api/account/details/', AccountDetailsView.as_view(), name='api_account_details'),
+    path('api/account/edit/', EditAccountDetailsView.as_view(), name='api_edit_account'),
+    path('api/account/update/', UpdateAccountDetailsView.as_view(), name='api_update_account'),
+    path('api/orders/', OrderHistoryView.as_view(), name='api_order_history'),
+    path('api/orders/<int:order_id>/', OrderDetailView.as_view(), name='api_order_detail'),
 ]
