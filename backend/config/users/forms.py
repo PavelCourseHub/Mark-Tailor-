@@ -1,94 +1,160 @@
-# Полный набор форм для аутентификации и управления пользователями в Django
+"""
+Формы для пользователей.
+ВНИМАНИЕ: Этот файл используется только для административной части (admin panel).
+Для API используются сериализаторы в serializers.py.
+"""
 
 from django import forms
-from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
-from django.contrib.auth import get_user_model, authenticate
-from django.utils.html import strip_tags
+from django.contrib.auth.forms import UserCreationForm, UserChangeForm
+from django.contrib.auth import get_user_model
 from django.core.validators import RegexValidator
-
+from django.utils.html import strip_tags
 
 User = get_user_model()
 
-# Регистрация новых пользователей с использованием email вместо username.
 
 class CustomUserCreationForm(UserCreationForm):
-    email = forms.EmailField(required=True, max_length=254, widget=forms.EmailInput(attrs={'class': 'dotted-input w-full py-3 text-sm font-medium text-gray-900 placeholder-gray-500', 'placeholder': 'EMAIL'}))
-    first_name = forms.CharField(required=True, max_length=50, widget=forms.TextInput(attrs={'class': 'dotted-input w-full py-3 text-sm font-medium text-gray-900 placeholder-gray-500', 'placeholder': 'FIRST NAME'}))
-    last_name = forms.CharField(required=True, max_length=50, widget=forms.TextInput(attrs={'class': 'dotted-input w-full py-3 text-sm font-medium text-gray-900 placeholder-gray-500', 'placeholder': 'LAST NAME'}))
-    password1 = forms.CharField(
+    """
+    Форма для создания пользователя в админке
+    """
+    email = forms.EmailField(
         required=True,
-        widget=forms.PasswordInput(attrs={'class': 'dotted-input w-full py-3 text-sm font-medium text-gray-900 placeholder-gray-500', 'placeholder': 'PASSWORD'})
-    )
-    password2 = forms.CharField(
-        required=True,
-        widget=forms.PasswordInput(attrs={'class': 'dotted-input w-full py-3 text-sm font-medium text-gray-900 placeholder-gray-500', 'placeholder': 'CONFIRM PASSWORD'})
-    )
-
-
-    class Meta:
-        model = User
-        fields = ('first_name', 'last_name', 'email', 'password1', 'password2')
-
-    
-    def clean_email(self):
-        email = self.cleaned_data.get('email')
-        if User.objects.filter(email=email).exists():
-            raise forms.ValidationError('This email is already in use.')
-        return email
-    
-
-    def save(self, commit=True):
-        user = super().save(commit=False)
-        user.is_active = False  # Требуется подтверждение email
-        if commit:
-            user.save()
-            # Отправить email с подтверждением
-        return user
-    
-# Аутентификация пользователя по email и паролю.
-
-class CustomUserLoginForm(AuthenticationForm):
-    username = forms.CharField(label="Email", widget=forms.TextInput(attrs={'class': 'dotted-input w-full py-3 text-sm font-medium text-gray-900 placeholder-gray-500', 'placeholder': 'EMAIL'}))
-    password = forms.CharField(
-        label="Password",
-        widget=forms.PasswordInput(attrs={'class': 'dotted-input w-full py-3 text-sm font-medium text-gray-900 placeholder-gray-500', 'placeholder': 'PASSWORD'})
-    )
-
-     
-    def clean(self):
-        email = self.cleaned_data.get('username')
-        password = self.cleaned_data.get('password')
-
-        if email and password:
-            self.user_cache = authenticate(self.request, email=email, password=password)
-            if self.user_cache is None:
-                raise forms.ValidationError('Invalid email or password.')
-            elif not self.user_cache.is_active:
-                raise forms.ValidationError('This account is inactive.')
-        return self.cleaned_data
-
-# Позволяет пользователям редактировать свои данные.
-class CustomUserUpdateForm(forms.ModelForm):
-    phone = forms.CharField(
-        required=False,
-        validators=[RegexValidator(r'^\+?375?\d{9,15}$', "Введите номер телефона.")],
-        widget=forms.TextInput(attrs={'class': 'dotted-input w-full py-3 text-sm font-medium text-gray-900 placeholder-gray-500', 'placeholder': 'PHONE NUMBER'})
+        max_length=254,
+        widget=forms.EmailInput(attrs={'class': 'vTextField'})
     )
     first_name = forms.CharField(
         required=True,
         max_length=50,
-        widget=forms.TextInput(attrs={'class': 'dotted-input w-full py-3 text-sm font-medium text-gray-900 placeholder-gray-500', 'placeholder': 'FIRST NAME'})
+        widget=forms.TextInput(attrs={'class': 'vTextField'})
     )
     last_name = forms.CharField(
         required=True,
         max_length=50,
-        widget=forms.TextInput(attrs={'class': 'dotted-input w-full py-3 text-sm font-medium text-gray-900 placeholder-gray-500', 'placeholder': 'LAST NAME'})
+        widget=forms.TextInput(attrs={'class': 'vTextField'})
     )
-    email = forms.EmailField(
+    phone = forms.CharField(
         required=False,
-        widget=forms.EmailInput(attrs={'class': 'dotted-input w-full py-3 text-sm font-medium text-gray-900 placeholder-gray-500', 'placeholder': 'EMAIL'})
+        validators=[RegexValidator(r'^\+?375?\d{9,15}$', "Enter a valid phone number.")],
+        widget=forms.TextInput(attrs={'class': 'vTextField'})
     )
 
+    class Meta:
+        model = User
+        fields = ('first_name', 'last_name', 'email', 'phone', 'password1', 'password2')
+
+    def clean_email(self):
+        """Проверка уникальности email"""
+        email = self.cleaned_data.get('email')
+        if User.objects.filter(email=email).exists():
+            raise forms.ValidationError('This email is already in use.')
+        return email
+
+    def save(self, commit=True):
+        """Сохранение пользователя"""
+        user = super().save(commit=False)
+        user.is_active = True  # Для админки создаем активного пользователя
+        if commit:
+            user.save()
+        return user
+
+
+class CustomUserChangeForm(UserChangeForm):
+    """
+    Форма для изменения пользователя в админке
+    """
+    phone = forms.CharField(
+        required=False,
+        validators=[RegexValidator(r'^\+?375?\d{9,15}$', "Enter a valid phone number.")],
+        widget=forms.TextInput(attrs={'class': 'vTextField'})
+    )
+
+    class Meta:
+        model = User
+        fields = ('first_name', 'last_name', 'email', 'company', 
+                  'address1', 'address2', 'city', 'country',  # Используем address1, address2
+                  'province', 'postal_code', 'phone')
+
+    def clean_email(self):
+        """Проверка уникальности email при изменении"""
+        email = self.cleaned_data.get('email')
+        if email and User.objects.filter(email=email).exclude(id=self.instance.id).exists():
+            raise forms.ValidationError('This email is already in use.')
+        return email
+
+    def clean(self):
+        """Очистка HTML тегов из текстовых полей"""
+        cleaned_data = super().clean()
+        
+        # Очищаем текстовые поля от HTML тегов
+        text_fields = ['company', 'address1', 'address2', 'city', 
+                       'country', 'province', 'postal_code', 'phone']
+        
+        for field in text_fields:
+            if cleaned_data.get(field):
+                cleaned_data[field] = strip_tags(cleaned_data[field])
+        
+        return cleaned_data
+
+
+# Следующие формы оставлены для обратной совместимости,
+# но в DRF они не используются
+class CustomUserLoginForm(forms.Form):
+    """
+    Форма для входа (не используется в DRF, оставлена для совместимости)
+    """
+    email = forms.EmailField(
+        widget=forms.EmailInput(attrs={'class': 'vTextField'})
+    )
+    password = forms.CharField(
+        widget=forms.PasswordInput(attrs={'class': 'vTextField'})
+    )
+
+    def clean(self):
+        email = self.cleaned_data.get('email')
+        password = self.cleaned_data.get('password')
+        
+        if email and password:
+            from django.contrib.auth import authenticate
+            self.user_cache = authenticate(
+                self.request, 
+                username=email, 
+                password=password
+            )
+            
+            if self.user_cache is None:
+                raise forms.ValidationError('Invalid email or password.')
+            elif not self.user_cache.is_active:
+                raise forms.ValidationError('This account is inactive.')
+        
+        return self.cleaned_data
+
+    def get_user(self):
+        return self.user_cache
+
+
+class CustomUserUpdateForm(forms.ModelForm):
+    """
+    Форма для обновления профиля (не используется в DRF, оставлена для совместимости)
+    """
+    phone = forms.CharField(
+        required=False,
+        validators=[RegexValidator(r'^\+?375?\d{9,15}$', "Enter a valid phone number.")],
+        widget=forms.TextInput(attrs={'class': 'vTextField'})
+    )
+    first_name = forms.CharField(
+        required=True,
+        max_length=50,
+        widget=forms.TextInput(attrs={'class': 'vTextField'})
+    )
+    last_name = forms.CharField(
+        required=True,
+        max_length=50,
+        widget=forms.TextInput(attrs={'class': 'vTextField'})
+    )
+    email = forms.EmailField(
+        required=True,
+        widget=forms.EmailInput(attrs={'class': 'vTextField'})
+    )
 
     class Meta:
         model = User
@@ -96,29 +162,31 @@ class CustomUserUpdateForm(forms.ModelForm):
                   'address1', 'address2', 'city', 'country',
                   'province', 'postal_code', 'phone')
         widgets = {
-            'company': forms.TextInput(attrs={'class': 'dotted-input w-full py-3 text-sm font-medium text-gray-900 placeholder-gray-500', 'placeholder': 'COMPANY'}),
-            'address1': forms.TextInput(attrs={'class': 'dotted-input w-full py-3 text-sm font-medium text-gray-900 placeholder-gray-500', 'placeholder': 'ADDRESS LINE 1'}),
-            'address2': forms.TextInput(attrs={'class': 'dotted-input w-full py-3 text-sm font-medium text-gray-900 placeholder-gray-500', 'placeholder': 'ADDRESS LINE 2'}),
-            'city': forms.TextInput(attrs={'class': 'dotted-input w-full py-3 text-sm font-medium text-gray-900 placeholder-gray-500', 'placeholder': 'CITY'}),
-            'country': forms.TextInput(attrs={'class': 'dotted-input w-full py-3 text-sm font-medium text-gray-900 placeholder-gray-500', 'placeholder': 'COUNTRY'}),
-            'province': forms.TextInput(attrs={'class': 'dotted-input w-full py-3 text-sm font-medium text-gray-900 placeholder-gray-500', 'placeholder': 'PROVINCE'}),
-            'postal_code': forms.TextInput(attrs={'class': 'dotted-input w-full py-3 text-sm font-medium text-gray-900 placeholder-gray-500', 'placeholder': 'POSTAL CODE'}),
+            'company': forms.TextInput(attrs={'class': 'vTextField'}),
+            'address1': forms.TextInput(attrs={'class': 'vTextField'}),
+            'address2': forms.TextInput(attrs={'class': 'vTextField'}),
+            'city': forms.TextInput(attrs={'class': 'vTextField'}),
+            'country': forms.TextInput(attrs={'class': 'vTextField'}),
+            'province': forms.TextInput(attrs={'class': 'vTextField'}),
+            'postal_code': forms.TextInput(attrs={'class': 'vTextField'}),
         }
-        
-    
+
     def clean_email(self):
+        """Проверка уникальности email при обновлении"""
         email = self.cleaned_data.get('email')
         if email and User.objects.filter(email=email).exclude(id=self.instance.id).exists():
-            raise forms.ValidationError('This email is alredy in use.')
+            raise forms.ValidationError('This email is already in use.')
         return email
-    
 
     def clean(self):
+        """Очистка HTML тегов из текстовых полей"""
         cleaned_data = super().clean()
-        if not cleaned_data.get('email'):
-            cleaned_data['email'] = self.instance.email
-        for field in ['company', 'address1', 'address2', 'city', 'country',
-                      'province', 'postal_code', 'phone']:
+        
+        text_fields = ['company', 'address1', 'address2', 'city', 
+                       'country', 'province', 'postal_code', 'phone']
+        
+        for field in text_fields:
             if cleaned_data.get(field):
                 cleaned_data[field] = strip_tags(cleaned_data[field])
+        
         return cleaned_data

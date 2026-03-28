@@ -30,7 +30,7 @@ class RegisterView(APIView):
                 login(request, user, backend='django.contrib.auth.backends.ModelBackend')
                 
                 return Response({
-                    'message': 'User created successfully',
+                    'message': 'Пользователь успешно зарегистрирован',
                     'user': UserSerializer(user).data
                 }, status=status.HTTP_201_CREATED)
         
@@ -71,7 +71,7 @@ class ProfileView(APIView):
         if serializer.is_valid():
             user = serializer.save()
             return Response({
-                'message': 'Profile updated successfully',
+                'message': 'Профиль успешно обновлен',
                 'user': UserSerializer(user).data
             }, status=status.HTTP_200_OK)
         
@@ -82,7 +82,7 @@ class ProfileView(APIView):
         if serializer.is_valid():
             user = serializer.save()
             return Response({
-                'message': 'Profile updated successfully',
+                'message': 'Профиль успешно обновлен',
                 'user': UserSerializer(user).data
             }, status=status.HTTP_200_OK)
         
@@ -117,7 +117,7 @@ class UpdateAccountDetailsView(APIView):
                 request.user.refresh_from_db()
                 
                 return Response({
-                    'message': 'Account details updated successfully',
+                    'message': 'Данные аккаунта успешно обновлены',
                     'user': UserSerializer(user).data
                 }, status=status.HTTP_200_OK)
         
@@ -131,7 +131,7 @@ class UpdateAccountDetailsView(APIView):
                 request.user.refresh_from_db()
                 
                 return Response({
-                    'message': 'Account details updated successfully',
+                    'message': 'Данные аккаунта успешно обновлены',
                     'user': UserSerializer(user).data
                 }, status=status.HTTP_200_OK)
         
@@ -144,7 +144,7 @@ class LogoutView(APIView):
     def post(self, request):
         logout(request)
         return Response({
-            'message': 'Logout successful'
+            'message': 'Выход выполнен успешно'
         }, status=status.HTTP_200_OK)
 
 

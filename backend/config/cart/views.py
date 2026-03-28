@@ -1,65 +1,93 @@
-from django.shortcuts import get_object_or_404, redirect
-from django.views.generic import View
-from django.http import JsonResponse, HttpResponse
-from django.template.response import TemplateResponse
-from django.contrib import messages
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from django.shortcuts import get_object_or_404
 from django.db import transaction
-from main.models import Product, ProductSize
+import logging
+
 from .models import Cart, CartItem
-from .forms import AddToCartForm
-import json
+from .serializers import (
+    CartSerializer,
+    CartItemSerializer,
+    AddToCartSerializer,
+    UpdateCartItemSerializer,
+    CartResponseSerializer
+)
+from main.models import Product, ProductSize
+
+logger = logging.getLogger(__name__)
 
 
 class CartMixin:
+    """
+    Миксин для работы с корзиной
+    """
     def get_cart(self, request):
-        # Возвращает корзину из request.cart (если есть)
-        # Или создает/получает из БД по session_key
-        # Сохраняет cart_id в сессии для оптимизации
-        if hasattr(request, 'cart'):
-            return request.cart
-    
-        if not request.session.session_key:
-            request.session.create()
-
-        cart, created = Cart.objects.get_or_create(
-            session_key=request.session.session_key
-        )
-
+        """
+        Получить или создать корзину для текущей сессии/пользователя
+        """
+        # Если пользователь авторизован, используем его корзину
+        if request.user.is_authenticated:
+            cart, created = Cart.objects.get_or_create(
+                user=request.user,
+                defaults={'session_key': request.session.session_key}
+            )
+        else:
+            # Для неавторизованных пользователей используем сессию
+            if not request.session.session_key:
+                request.session.create()
+            
+            cart, created = Cart.objects.get_or_create(
+                session_key=request.session.session_key
+            )
+        
+        # Сохраняем ID корзины в сессии для быстрого доступа
         request.session['cart_id'] = cart.id
         request.session.modified = True
+        
         return cart
-    
 
-# Просмотр модального окна корзины
-class CartModalView(CartMixin, View):   
+
+class CartView(APIView, CartMixin):
+    """
+    Получение информации о корзине
+    """
+    permission_classes = [AllowAny]
+
     def get(self, request):
         cart = self.get_cart(request)
-        context = {
-            'cart': cart,
-            'cart_items': cart.items.select_related(
-                'product',
-                'product_size__size'
-            ).order_by('-added_at')
-        }
-        return TemplateResponse(request, 'cart/cart_modal.html', context)
+        serializer = CartSerializer(cart)
+        
+        return Response({
+            'cart': serializer.data
+        }, status=status.HTTP_200_OK)
 
 
-# Добавление товара в корзину
-class AddToCartView(CartMixin, View):
+class AddToCartView(APIView, CartMixin):
+    """
+    Добавление товара в корзину
+    """
+    permission_classes = [AllowAny]
+
     @transaction.atomic
     def post(self, request, slug):
         cart = self.get_cart(request)
-        product = get_object_or_404(Product, slug=slug)
-
-        form = AddToCartForm(request.POST, product=product)
-
-        if not form.is_valid():
-            return JsonResponse({
-                'error': 'Invalid form data',
-                'errors': form.errors,
-            }, status=400)
+        product = get_object_or_404(Product, slug=slug, is_active=True)
         
-        size_id = form.cleaned_data.get('size_id')
+        # Валидируем данные
+        serializer = AddToCartSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({
+                'error': 'Invalid form data',
+                'details': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        validated_data = serializer.validated_data
+        size_id = validated_data.get('size_id')
+        quantity = validated_data['quantity']
+        
+        # Получаем размер товара
         if size_id:
             product_size = get_object_or_404(
                 ProductSize,
@@ -67,139 +95,283 @@ class AddToCartView(CartMixin, View):
                 product=product
             )
         else:
+            # Если размер не указан, берем первый доступный
             product_size = product.product_sizes.filter(stock__gt=0).first()
             if not product_size:
-                return JsonResponse({
-                    'error': 'No sizes available'
-                }, status=400)
-
-        quantity = form.cleaned_data['quantity']
+                return Response({
+                    'error': 'No sizes available for this product'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Проверяем наличие на складе
         if product_size.stock < quantity:
-            return JsonResponse({
+            return Response({
                 'error': f'Only {product_size.stock} items available'
-            }, status=400)
-
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Проверяем, есть ли уже такой товар в корзине
         existing_item = cart.items.filter(
             product=product,
-            product_size=product_size,
+            product_size=product_size
         ).first()
-
+        
         if existing_item:
             total_quantity = existing_item.quantity + quantity
             if total_quantity > product_size.stock:
-                return JsonResponse({
-                    'error': f"Cannot add {quantity} items. Only {product_size.stock - existing_item.quantity} more available."
-                }, status=400)
-            
+                return Response({
+                    'error': f'Cannot add {quantity} items. Only {product_size.stock - existing_item.quantity} more available.'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Добавляем товар в корзину
         cart_item = cart.add_product(product, product_size, quantity)
-
+        
+        # Обновляем сессию
         request.session['cart_id'] = cart.id
         request.session.modified = True
-
-        if request.headers.get('HX-Request'):
-            return redirect('cart:cart_modal')
-        else:
-            return JsonResponse({
-                'success': True,
-                'total_items': cart.total_items,
-                'message': f"{product.name} added to cart",
-                'cart_item_id': cart_item.id
-            })
         
-#Обновление количества конкретного товара
-class UpdateCartItemView(CartMixin, View):
+        # Получаем обновленную корзину
+        cart_serializer = CartSerializer(cart)
+        
+        response_data = {
+            'success': True,
+            'message': f'{product.name} added to cart',
+            'cart': cart_serializer.data,
+            'cart_item_id': cart_item.id,
+            'total_items': cart.total_items
+        }
+        
+        return Response(response_data, status=status.HTTP_200_OK)
+
+
+class UpdateCartItemView(APIView, CartMixin):
+    """
+    Обновление количества товара в корзине
+    """
+    permission_classes = [AllowAny]
+
     @transaction.atomic
-    def post(self, request, item_id):
+    def put(self, request, item_id):
         cart = self.get_cart(request)
         cart_item = get_object_or_404(CartItem, id=item_id, cart=cart)
-
-        quantity = int(request.POST.get('quantity', 1))
-
-        if quantity < 0:
-            return JsonResponse({'error': 'Invalid quantity'}, status=400)
         
+        # Валидируем данные
+        serializer = UpdateCartItemSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({
+                'error': 'Invalid data',
+                'details': serializer.errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        quantity = serializer.validated_data['quantity']
+        
+        # Если количество 0, удаляем товар
         if quantity == 0:
             cart_item.delete()
+            message = f'{cart_item.product.name} removed from cart'
         else:
+            # Проверяем наличие на складе
             if quantity > cart_item.product_size.stock:
-                return JsonResponse({
+                return Response({
                     'error': f'Only {cart_item.product_size.stock} items available'
-                }, status=400)
+                }, status=status.HTTP_400_BAD_REQUEST)
             
             cart_item.quantity = quantity
             cart_item.save()
-
+            message = f'{cart_item.product.name} quantity updated'
+        
+        # Обновляем сессию
         request.session['cart_id'] = cart.id
         request.session.modified = True
-
-        context = {
-            'cart': cart,
-            'cart_items': cart.items.select_related(
-                'product',
-                'product_size__size',
-            ).order_by('-added_at')
+        
+        # Получаем обновленную корзину
+        cart_serializer = CartSerializer(cart)
+        
+        response_data = {
+            'success': True,
+            'message': message,
+            'cart': cart_serializer.data
         }
-        return TemplateResponse(request, 'cart/cart_modal.html', context)
+        
+        return Response(response_data, status=status.HTTP_200_OK)
     
-# Удаление товара из корзины
-class RemoveCartItemView(CartMixin, View):
-    def post(self, request, item_id):
-        cart = self.get_cart(request)
+    def patch(self, request, item_id):
+        """
+        Частичное обновление (для совместимости)
+        """
+        return self.put(request, item_id)
 
+
+class RemoveCartItemView(APIView, CartMixin):
+    """
+    Удаление товара из корзины
+    """
+    permission_classes = [AllowAny]
+
+    @transaction.atomic
+    def delete(self, request, item_id):
+        cart = self.get_cart(request)
+        
         try:
             cart_item = cart.items.get(id=item_id)
+            product_name = cart_item.product.name
             cart_item.delete()
-
+            
+            # Обновляем сессию
             request.session['cart_id'] = cart.id
             request.session.modified = True
-
-            context = {
-                'cart': cart,
-                'cart_items': cart.items.select_related(
-                    'product',
-                    'product_size__size',
-                ).order_by('-added_at')
+            
+            # Получаем обновленную корзину
+            cart_serializer = CartSerializer(cart)
+            
+            response_data = {
+                'success': True,
+                'message': f'{product_name} removed from cart',
+                'cart': cart_serializer.data
             }
-            return TemplateResponse(request, 'cart/cart_modal.html', context)
+            
+            return Response(response_data, status=status.HTTP_200_OK)
+            
         except CartItem.DoesNotExist:
-            return JsonResponse({'error': 'Item not found'}, status=400)
-        
-# Получение информации о корзине    
-class CartCountView(CartMixin, View):
+            return Response({
+                'error': 'Item not found in cart'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+
+class CartCountView(APIView, CartMixin):
+    """
+    Получение количества товаров в корзине
+    """
+    permission_classes = [AllowAny]
+
     def get(self, request):
         cart = self.get_cart(request)
-        return JsonResponse({
+        
+        return Response({
             'total_items': cart.total_items,
-            'subtotal': float(cart.subtotal)
-        })
-    
-# Очистка корзины
-class ClearCartView(CartMixin, View):
+            'subtotal': float(cart.subtotal),
+            'total_price': float(cart.subtotal)
+        }, status=status.HTTP_200_OK)
+
+
+class ClearCartView(APIView, CartMixin):
+    """
+    Очистка корзины
+    """
+    permission_classes = [AllowAny]
+
+    @transaction.atomic
     def post(self, request):
         cart = self.get_cart(request)
         cart.clear()
-
+        
+        # Обновляем сессию
         request.session['cart_id'] = cart.id
         request.session.modified = True
+        
+        # Получаем пустую корзину
+        cart_serializer = CartSerializer(cart)
+        
+        response_data = {
+            'success': True,
+            'message': 'Cart cleared successfully',
+            'cart': cart_serializer.data
+        }
+        
+        return Response(response_data, status=status.HTTP_200_OK)
 
-        if request.headers.get('HX-Request'):
-            return TemplateResponse(request, 'cart/cart_empty.html', {
-                'cart': cart
-            })
-        return JsonResponse({
-            'succes': True,
-            'message': 'Cart cleared'
-        })
 
-# Полная страница корзины
-class CartSummaryView(CartMixin, View):
+class CartSummaryView(APIView, CartMixin):
+    """
+    Полная информация о корзине (для страницы корзины)
+    """
+    permission_classes = [AllowAny]
+
     def get(self, request):
         cart = self.get_cart(request)
-        context = {
-            'cart': cart,
-            'cart_items': cart.items.select_related(
-                'product',
-                'product_size__size'
-            ).order_by('-added_at')
+        serializer = CartSerializer(cart)
+        
+        # Добавляем дополнительную информацию
+        response_data = {
+            'cart': serializer.data,
+            'is_empty': cart.total_items == 0,
+            'checkout_url': '/api/checkout/'  # URL для оформления заказа
         }
-        return TemplateResponse(request, 'cart/cart_summary.html', context)
+        
+        return Response(response_data, status=status.HTTP_200_OK)
+
+
+class CartItemDetailView(APIView, CartMixin):
+    """
+    Детальная информация о конкретном товаре в корзине
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, item_id):
+        cart = self.get_cart(request)
+        cart_item = get_object_or_404(CartItem, id=item_id, cart=cart)
+        
+        serializer = CartItemSerializer(cart_item)
+        
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class MergeCartView(APIView):
+    """
+    Объединение корзины гостя с корзиной пользователя после авторизации
+    """
+    permission_classes = [IsAuthenticated]
+
+    @transaction.atomic
+    def post(self, request):
+        session_key = request.data.get('session_key')
+        
+        if not session_key:
+            return Response({
+                'error': 'Session key is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Получаем корзину гостя
+            guest_cart = Cart.objects.get(session_key=session_key)
+            
+            # Получаем или создаем корзину пользователя
+            user_cart, created = Cart.objects.get_or_create(
+                user=request.user,
+                defaults={'session_key': request.session.session_key}
+            )
+            
+            # Переносим товары из корзины гостя в корзину пользователя
+            for guest_item in guest_cart.items.all():
+                existing_item = user_cart.items.filter(
+                    product=guest_item.product,
+                    product_size=guest_item.product_size
+                ).first()
+                
+                if existing_item:
+                    # Обновляем количество, если товар уже есть
+                    existing_item.quantity += guest_item.quantity
+                    existing_item.save()
+                else:
+                    # Переносим товар
+                    guest_item.cart = user_cart
+                    guest_item.save()
+            
+            # Удаляем корзину гостя
+            guest_cart.delete()
+            
+            # Обновляем сессию
+            request.session['cart_id'] = user_cart.id
+            request.session.modified = True
+            
+            # Получаем обновленную корзину
+            cart_serializer = CartSerializer(user_cart)
+            
+            return Response({
+                'success': True,
+                'message': 'Cart merged successfully',
+                'cart': cart_serializer.data
+            }, status=status.HTTP_200_OK)
+            
+        except Cart.DoesNotExist:
+            return Response({
+                'error': 'Guest cart not found'
+            }, status=status.HTTP_404_NOT_FOUND)

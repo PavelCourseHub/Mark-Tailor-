@@ -11,6 +11,8 @@ from .views import (
     OrderDetailView
 )
 
+app_name = 'users'
+
 urlpatterns = [
     path('api/register/', RegisterView.as_view(), name='api_register'),
     path('api/login/', LoginView.as_view(), name='api_login'),
