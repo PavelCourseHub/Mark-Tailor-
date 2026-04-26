@@ -2,6 +2,7 @@ from django.db import models
 from django.utils.text import slugify
 from django.core.validators import MinValueValidator, MaxValueValidator
 from decimal import Decimal
+from django.core.validators import FileExtensionValidator
 
 
 class Category(models.Model):
@@ -73,6 +74,11 @@ class Product(models.Model):
     description = models.TextField(blank=True, verbose_name='Описание')
     main_image = models.ImageField(
         upload_to='products/main/',
+        validators=[
+            FileExtensionValidator(
+                allowed_extensions=['jpg', 'jpeg', 'png', 'webp']
+            )
+        ],
         verbose_name='Главное изображение'
     )
     stock = models.PositiveIntegerField(

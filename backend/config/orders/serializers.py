@@ -1,7 +1,6 @@
 from rest_framework import serializers
-from .models import Order, OrderItem
-from cart.models import CartItem
-from main.models import ProductSize
+from orders.models import Order, OrderItem
+from main.models import Product
 from decimal import Decimal
 
 
@@ -9,12 +8,16 @@ class OrderItemSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_price = serializers.DecimalField(source='product.price', max_digits=10, decimal_places=2, read_only=True)
     size_name = serializers.CharField(source='size.size.name', read_only=True)
+    total_price = serializers.SerializerMethodField()
     
     class Meta:
         model = OrderItem
         fields = ('id', 'product', 'product_name', 'size', 'size_name', 
-                  'quantity', 'price', 'product_price')
+                  'quantity', 'price', 'product_price', 'total_price')
         read_only_fields = ('id', 'price')
+    
+    def get_total_price(self, obj):
+        return obj.price * obj.quantity
 
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -26,46 +29,61 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = ('id', 'user', 'first_name', 'last_name', 'email', 'company',
                   'address1', 'address2', 'city', 'country', 'province', 
                   'postal_code', 'phone', 'special_instructions', 'status',
-                  'total_price', 'created_at', 'payment_provider', 
+                  'total_price', 'created_at', 'updated_at', 'payment_provider', 
                   'stripe_payment_intent_id', 'items')
-        read_only_fields = ('id', 'user', 'status', 'created_at', 
-                           'total_price', 'stripe_payment_intent_id')
+        read_only_fields = ('id', 'user', 'status', 'created_at', 'updated_at', 'total_price')
 
 
 class CheckoutRequestSerializer(serializers.Serializer):
+    # Обязательные поля
     payment_provider = serializers.ChoiceField(choices=['stripe', 'heleket'], required=True)
     first_name = serializers.CharField(max_length=50, required=True)
     last_name = serializers.CharField(max_length=50, required=True)
-    email = serializers.EmailField(required=False)
-    company = serializers.CharField(max_length=100, required=False, allow_blank=True)
-    address1 = serializers.CharField(max_length=250, required=True)
-    address2 = serializers.CharField(max_length=250, required=False, allow_blank=True)
-    city = serializers.CharField(max_length=100, required=True)
-    country = serializers.CharField(max_length=100, required=True)
-    province = serializers.CharField(max_length=100, required=True)
-    postal_code = serializers.CharField(max_length=20, required=True)
-    phone = serializers.CharField(max_length=20, required=True)
+    
+    # Необязательные поля
+    email = serializers.EmailField(required=False, allow_blank=True)
+    company = serializers.CharField(required=False, allow_blank=True)
+    phone = serializers.CharField(required=False, allow_blank=True)
     special_instructions = serializers.CharField(required=False, allow_blank=True)
     
-    def validate_email(self, value):
-        if not value and self.context.get('request') and self.context['request'].user.is_authenticated:
-            return self.context['request'].user.email
-        return value
+    # Адресные поля - необязательные по умолчанию
+    address1 = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    address2 = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    city = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    country = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    province = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    postal_code = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    
+    # Способ доставки (по умолчанию pickup)
+    delivery_method = serializers.ChoiceField(choices=['pickup', 'courier'], required=False, default='pickup')
+    
+    def validate(self, attrs):
+        delivery_method = attrs.get('delivery_method', 'pickup')
+        
+        # Только для курьерской доставки проверяем наличие адреса
+        if delivery_method == 'courier':
+            if not attrs.get('address1'):
+                raise serializers.ValidationError({'address1': 'Address is required for courier delivery'})
+            if not attrs.get('city'):
+                raise serializers.ValidationError({'city': 'City is required for courier delivery'})
+            if not attrs.get('country'):
+                raise serializers.ValidationError({'country': 'Country is required for courier delivery'})
+        
+        return attrs
 
 
-class CartItemSerializer(serializers.ModelSerializer):
-    product_name = serializers.CharField(source='product.name', read_only=True)
-    product_price = serializers.DecimalField(source='product.price', max_digits=10, decimal_places=2, read_only=True)
-    size_name = serializers.CharField(source='product_size.size.name', read_only=True)
-    subtotal = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = CartItem
-        fields = ('id', 'product', 'product_name', 'product_size', 'size_name',
-                  'quantity', 'product_price', 'subtotal', 'added_at')
-    
-    def get_subtotal(self, obj):
-        return obj.product.price * obj.quantity if obj.product.price else Decimal('0.00')
+class CartItemSerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    product_id = serializers.IntegerField()
+    product_name = serializers.CharField()
+    product_slug = serializers.CharField()
+    product_price = serializers.DecimalField(max_digits=10, decimal_places=2)
+    size_id = serializers.IntegerField()
+    size_name = serializers.CharField()
+    quantity = serializers.IntegerField()
+    subtotal = serializers.DecimalField(max_digits=10, decimal_places=2)
+    stock_available = serializers.IntegerField()
+    product_image = serializers.CharField(allow_null=True)
 
 
 class CartSerializer(serializers.Serializer):

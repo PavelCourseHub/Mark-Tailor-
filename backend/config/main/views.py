@@ -2,7 +2,6 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
-from django.db import models
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
@@ -38,8 +37,7 @@ class IndexView(APIView):
     
     def get_featured_products(self, request):
         """Получить рекомендуемые/популярные товары"""
-        # Здесь можно добавить логику для рекомендуемых товаров
-        featured = Product.objects.all().order_by('-created_at')[:8]
+        featured = Product.objects.filter(is_active=True).order_by('-created_at')[:8]
         return ProductSerializer(featured, many=True, context={'request': request}).data
 
 
@@ -58,7 +56,7 @@ class CatalogView(APIView):
         filters = filter_serializer.validated_data
         
         # Начинаем с базового queryset
-        products = Product.objects.all().select_related('category').prefetch_related('sizes')
+        products = Product.objects.filter(is_active=True).select_related('category').prefetch_related('product_sizes__size')
         
         # Фильтрация по категории
         category_slug = filters.get('category')
@@ -92,7 +90,7 @@ class CatalogView(APIView):
         # Фильтрация по размеру
         size = filters.get('size')
         if size:
-            products = products.filter(sizes__name__iexact=size)
+            products = products.filter(product_sizes__size__name__iexact=size)
         
         # Сортировка
         sort = filters.get('sort')
@@ -172,6 +170,7 @@ class CatalogView(APIView):
     
     def get_price_range(self):
         """Получить диапазон цен для фильтра"""
+        from django.db import models
         min_price = Product.objects.aggregate(min_price=models.Min('price'))['min_price']
         max_price = Product.objects.aggregate(max_price=models.Max('price'))['max_price']
         return {
@@ -187,11 +186,12 @@ class ProductDetailView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, slug):
-        product = get_object_or_404(Product, slug=slug)
+        product = get_object_or_404(Product, slug=slug, is_active=True)
         
         # Получаем связанные товары
         related_products = Product.objects.filter(
-            category=product.category
+            category=product.category,
+            is_active=True
         ).exclude(id=product.id)[:4]
         
         # Сериализуем данные
@@ -249,7 +249,8 @@ class SearchSuggestionsView(APIView):
         # Ищем товары по названию
         products = Product.objects.filter(
             Q(name__icontains=query) |
-            Q(description__icontains=query)
+            Q(description__icontains=query),
+            is_active=True
         )[:10]
         
         suggestions = []
@@ -259,7 +260,7 @@ class SearchSuggestionsView(APIView):
                 'name': product.name,
                 'slug': product.slug,
                 'price': str(product.price),
-                'image_url': product.image.url if product.image else None,
+                'image_url': product.main_image.url if product.main_image else None,
                 'type': 'product'
             })
         
@@ -291,10 +292,10 @@ class FilterOptionsView(APIView):
 
     def get(self, request):
         # Получаем уникальные значения для фильтров
-        colors = Product.objects.exclude(color__isnull=True).exclude(color='').values_list('color', flat=True).distinct()
+        colors = Product.objects.filter(is_active=True).exclude(color__isnull=True).exclude(color='').values_list('color', flat=True).distinct()
         sizes = Size.objects.all()
         
-        price_range = Product.objects.aggregate(
+        price_range = Product.objects.filter(is_active=True).aggregate(
             min_price=models.Min('price'),
             max_price=models.Max('price')
         )

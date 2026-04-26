@@ -13,6 +13,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 from pathlib import Path
 import os
 from dotenv import load_dotenv
+from datetime import timedelta
 
 load_dotenv()
 
@@ -34,8 +35,10 @@ ALLOWED_HOSTS = []
 
 # Самая важная настройка для подключения к фронтенду!
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",  # React dev server
-    "http://localhost:8000",
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -53,6 +56,13 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework',
     'rest_framework.authtoken', # Для токен-аутентификации
+    'rest_framework_simplejwt',
+
+    'django.contrib.sites',  # требуется для allauth
+    'allauth',
+    'allauth.account',
+    'dj_rest_auth',
+    'dj_rest_auth.registration',
 
     'main',
     'cart',
@@ -70,12 +80,14 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+
+    'allauth.account.middleware.AccountMiddleware',
 ]
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.SessionAuthentication',
-        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
@@ -185,4 +197,42 @@ CSRF_COOKIE_HTTPONLY = False
 AUTH_USER_MODEL = 'users.CustomUser'
 
 STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY')
+#STRIPE_PUBLIC_KEY = os.getenv('STRIPE_PUBLIC_KEY', '')
 STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET')
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+}
+
+# Настройки для отправки email
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
+EMAIL_USE_TLS = os.getenv('EMAIL_USE_TLS', 'True') == 'True'
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
+
+# Настройка отображения имени отправителя
+DEFAULT_FROM_EMAIL = 'Mark Tailor <noreply@marktailor.com>'
+
+SITE_ID = 1
+
+# Настройки REST_AUTH
+#REST_AUTH = {
+#    'USE_JWT': False,
+    #'PASSWORD_RESET_SERIALIZER': 'users.serializers.CustomPasswordResetSerializer',
+    #'PASSWORD_RESET_CONFIRM_URL': 'http://localhost:3000/password-reset/confirm/{uidb64}/{token}',
+#    'PASSWORD_RESET_SERIALIZER': 'dj_rest_auth.serializers.PasswordResetSerializer',
+#    'PASSWORD_RESET_CONFIRM_URL': 'http://localhost:3000/password-reset/confirm/{uidb64}/{token}',
+    #'PASSWORD_RESET_FORM': 'users.forms.CustomPasswordResetForm',  
+#}
+
+
+# Настройки allauth
+ACCOUNT_EMAIL_REQUIRED = True
+ACCOUNT_USERNAME_REQUIRED = False
+ACCOUNT_AUTHENTICATION_METHOD = 'email'
+ACCOUNT_EMAIL_VERIFICATION = 'none'  # Для разработки, можно установить 'mandatory' для продакшена
+ACCOUNT_UNIQUE_EMAIL = True

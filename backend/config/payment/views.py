@@ -13,11 +13,7 @@ from decimal import Decimal
 
 from orders.models import Order
 from cart.views import CartMixin
-from .serializers import (
-    StripeCheckoutSerializer,
-    PaymentStatusSerializer,
-    PaymentResponseSerializer
-)
+from django.shortcuts import redirect
 
 logger = logging.getLogger(__name__)
 
@@ -33,11 +29,15 @@ class CreateStripeCheckoutSessionView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        serializer = StripeCheckoutSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        order_id = serializer.validated_data['order_id']
+        order_id = request.data.get('order_id')
+        success_url = request.data.get('success_url')
+        cancel_url = request.data.get('cancel_url')
+        
+        if not order_id:
+            return Response({
+                'error': 'order_id is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         order = get_object_or_404(Order, id=order_id, user=request.user)
 
         # Проверяем, что заказ принадлежит пользователю и ожидает оплаты
@@ -66,7 +66,7 @@ class CreateStripeCheckoutSessionView(APIView):
             
             line_items.append({
                 'price_data': {
-                    'currency': 'eur',
+                    'currency': 'byn',
                     'product_data': {
                         'name': product_name,
                     },
@@ -77,22 +77,16 @@ class CreateStripeCheckoutSessionView(APIView):
 
         try:
             # Определяем URL для успешной оплаты и отмены
-            success_url = serializer.validated_data.get(
-                'success_url',
-                request.build_absolute_uri('/api/payment/stripe/success/')
-            )
-            cancel_url = serializer.validated_data.get(
-                'cancel_url',
-                request.build_absolute_uri('/api/payment/stripe/cancel/')
-            )
-
+            default_success_url = request.build_absolute_uri('/api/payment/stripe/success/')
+            default_cancel_url = request.build_absolute_uri('/api/payment/stripe/cancel/')
+            
             # Создаем Stripe checkout session
             checkout_session = stripe.checkout.Session.create(
                 payment_method_types=['card'],
                 line_items=line_items,
                 mode='payment',
-                success_url=success_url + '?session_id={CHECKOUT_SESSION_ID}',
-                cancel_url=cancel_url + f'?order_id={order.id}',
+                success_url=(success_url or default_success_url) + '?session_id={CHECKOUT_SESSION_ID}',
+                cancel_url=(cancel_url or default_cancel_url) + f'?order_id={order.id}',
                 metadata={
                     'order_id': order.id,
                     'user_id': request.user.id
@@ -105,29 +99,78 @@ class CreateStripeCheckoutSessionView(APIView):
             order.payment_provider = 'stripe'
             order.save()
 
-            logger.info(f"Stripe checkout session created: session_id={checkout_session.id}, "
-                       f"order_id={order.id}, user_id={request.user.id}")
+            logger.info(f"Stripe checkout session created: session_id={checkout_session.id}, order_id={order.id}")
 
-            response_data = {
+            return Response({
                 'session_id': checkout_session.id,
                 'session_url': checkout_session.url,
                 'order_id': order.id,
                 'payment_intent_id': checkout_session.payment_intent
-            }
-            
-            return Response(response_data, status=status.HTTP_200_OK)
+            }, status=status.HTTP_200_OK)
 
         except stripe.error.StripeError as e:
-            logger.error(f"Stripe error: {str(e)}", exc_info=True)
+            logger.error(f"Stripe error: {str(e)}")
             return Response({
                 'error': 'Payment provider error',
                 'message': str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            logger.error(f"Error creating Stripe session: {str(e)}", exc_info=True)
+            logger.error(f"Error creating Stripe session: {str(e)}")
             return Response({
                 'error': 'Payment processing error',
                 'message': 'Unable to create payment session'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class CreatePaymentIntentView(APIView):
+    """
+    Создание Payment Intent для Stripe Elements (без редиректа)
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        order_id = request.data.get('order_id')
+        
+        if not order_id:
+            return Response({
+                'error': 'order_id is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        order = get_object_or_404(Order, id=order_id, user=request.user)
+
+        if order.status != 'pending':
+            return Response({
+                'error': 'Order is not pending payment'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            payment_intent = stripe.PaymentIntent.create(
+                amount=int(order.total_price * 100),
+                currency='eur',
+                metadata={
+                    'order_id': order.id,
+                    'user_id': request.user.id
+                }
+            )
+
+            order.stripe_payment_intent_id = payment_intent.id
+            order.payment_provider = 'stripe'
+            order.save()
+
+            return Response({
+                'client_secret': payment_intent.client_secret,
+                'payment_intent_id': payment_intent.id
+            }, status=status.HTTP_200_OK)
+
+        except stripe.error.StripeError as e:
+            logger.error(f"Stripe error creating PaymentIntent: {str(e)}")
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(f"Error creating PaymentIntent: {str(e)}")
+            return Response({
+                'error': 'Failed to create payment intent'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -137,13 +180,12 @@ class StripeWebhookView(APIView):
     Обработка webhook событий от Stripe
     """
     permission_classes = [AllowAny]
-    
+
     def post(self, request):
         payload = request.body
         sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
         event = None
 
-        # Проверяем наличие webhook secret
         if not stripe_endpoint_secret:
             logger.error("Stripe webhook secret is not configured")
             return HttpResponse(status=500)
@@ -154,11 +196,9 @@ class StripeWebhookView(APIView):
             )
             logger.info(f"Stripe webhook received: event_type={event['type']}, event_id={event['id']}")
         except ValueError as e:
-            # Invalid payload
             logger.error(f"Invalid Stripe webhook payload: {str(e)}")
             return HttpResponse(status=400)
         except stripe.error.SignatureVerificationError as e:
-            # Invalid signature
             logger.error(f"Invalid Stripe webhook signature: {str(e)}")
             return HttpResponse(status=400)
 
@@ -197,11 +237,6 @@ class StripeWebhookView(APIView):
             order.save()
             
             logger.info(f"Order {order_id} status updated to processing after successful payment")
-            
-            # Здесь можно добавить:
-            # - Отправку email подтверждения заказа
-            # - Обновление库存 товаров
-            # - Создание записи в системе аналитики
             
         except Order.DoesNotExist:
             logger.error(f"Order {order_id} not found for checkout session completion")
@@ -259,102 +294,139 @@ class StripeSuccessView(APIView):
     """
     Обработка успешной оплаты (редирект со Stripe)
     """
-    permission_classes = [IsAuthenticated]
+    #permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def get(self, request):
         session_id = request.query_params.get('session_id')
         
         if not session_id:
-            return Response({
-                'error': 'Session ID is required'
-            }, status=status.HTTP_400_BAD_REQUEST)
+            #return Response({
+            #    'error': 'Session ID is required'
+            #}, status=status.HTTP_400_BAD_REQUEST)
+            return redirect('/cart')
 
         try:
             # Получаем сессию из Stripe
             session = stripe.checkout.Session.retrieve(session_id)
             order_id = session.metadata.get('order_id')
             
-            if not order_id:
-                return Response({
-                    'error': 'No order ID in session'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            order = get_object_or_404(Order, id=order_id, user=request.user)
+            #ДОБАВИЛИ ДЛЯ ТЕСТА
+            if order_id:
+                order = Order.objects.get(id=order_id)
+                if order.status == 'pending':
+                    order.status = 'processing'
+                    order.save()
 
-            # Проверяем, что заказ действительно оплачен
-            if order.status not in ['processing', 'completed']:
-                logger.warning(f"Order {order_id} status is {order.status} on success callback")
+            # Очищаем корзину пользователя (если есть request.user)
+                if request.user.is_authenticated:
+                    from cart.views import CartMixin
+                    cart_mixin = CartMixin()
+                    cart = cart_mixin.get_cart(request)
+                    if cart and cart.total_items > 0:
+                        cart.clear()
             
-            # Очищаем корзину пользователя
-            cart_mixin = CartMixin()
-            cart = cart_mixin.get_cart(request)
-            if cart and cart.total_items > 0:
-                cart.clear()
-                logger.info(f"Cart cleared for user {request.user.id} after successful payment")
-
-            from orders.serializers import OrderSerializer
-            order_serializer = OrderSerializer(order)
+            return redirect(f'http://localhost:3000/payment/success?order_id={order_id}')
             
-            response_data = {
-                'message': 'Payment successful',
-                'order': order_serializer.data,
-                'session_id': session_id
-            }
-            
-            return Response(response_data, status=status.HTTP_200_OK)
-
-        except stripe.error.StripeError as e:
-            logger.error(f"Stripe error on success: {str(e)}")
-            return Response({
-                'error': 'Failed to verify payment',
-                'message': str(e)
-            }, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             logger.error(f"Error on payment success: {str(e)}", exc_info=True)
-            return Response({
-                'error': 'Payment verification error',
-                'message': 'Unable to verify payment status'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return redirect('/cart')
+            
+            #if not order_id:
+            #    return Response({
+            #        'error': 'No order ID in session'
+            #    }, status=status.HTTP_400_BAD_REQUEST)
+            
+            #order = get_object_or_404(Order, id=order_id, user=request.user)
+
+            # Проверяем, что заказ действительно оплачен
+            #if order.status not in ['processing', 'completed']:
+            #    logger.warning(f"Order {order_id} status is {order.status} on success callback")
+            
+            # Очищаем корзину пользователя
+            #cart_mixin = CartMixin()
+            #cart = cart_mixin.get_cart(request)
+            #if cart and cart.total_items > 0:
+            #    cart.clear()
+            #    logger.info(f"Cart cleared for user {request.user.id} after successful payment")
+
+            #from orders.serializers import OrderSerializer
+            #order_serializer = OrderSerializer(order)
+            
+            #response_data = {
+            #    'message': 'Payment successful',
+            #    'order': order_serializer.data,
+            #    'session_id': session_id
+            #}
+            
+            #return Response(response_data, status=status.HTTP_200_OK)
+
+        #except stripe.error.StripeError as e:
+        #    logger.error(f"Stripe error on success: {str(e)}")
+        #    return Response({
+        #        'error': 'Failed to verify payment',
+        #        'message': str(e)
+        #    }, status=status.HTTP_400_BAD_REQUEST)
+        #except Exception as e:
+        #    logger.error(f"Error on payment success: {str(e)}", exc_info=True)
+        #    return Response({
+        #        'error': 'Payment verification error',
+        #        'message': 'Unable to verify payment status'
+        #    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class StripeCancelView(APIView):
     """
     Обработка отмены оплаты (редирект со Stripe)
     """
-    permission_classes = [IsAuthenticated]
+    #permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny] 
 
     def get(self, request):
         order_id = request.query_params.get('order_id')
         
         if not order_id:
-            return Response({
-                'error': 'Order ID is required'
-            }, status=status.HTTP_400_BAD_REQUEST)
+            #return Response({
+            #    'error': 'Order ID is required',
+            #    'redirect_url': '/cart'
+            #}, status=status.HTTP_400_BAD_REQUEST)
+            return redirect('/cart')
 
         try:
-            order = get_object_or_404(Order, id=order_id, user=request.user)
-            
+            #order = get_object_or_404(Order, id=order_id, user=request.user)
+            order = Order.objects.get(id=order_id)
+
             # Отменяем заказ только если он еще не обработан
             if order.status == 'pending':
                 order.status = 'cancelled'
                 order.save()
-                logger.info(f"Order {order_id} cancelled by user during payment")
+                logger.info(f"Заказ {order_id} отменен пользователем во время оплаты")
             
+            # Перенаправляем на страницу с сообщением об отмене
+            return redirect(f'http://localhost:3000/payment/cancel?order_id={order_id}')
+            
+        except Order.DoesNotExist:
+            logger.error(f"Order {order_id} not found")
+            return redirect('/cart')
+        except Exception as e:
+            logger.error(f"Ошибка при отмене платежа: {str(e)}", exc_info=True)
+            return redirect('/cart')
+
             from orders.serializers import OrderSerializer
             order_serializer = OrderSerializer(order)
             
-            response_data = {
+            return Response({
                 'message': 'Payment cancelled',
-                'order': order_serializer.data
-            }
-            
-            return Response(response_data, status=status.HTTP_200_OK)
+                'order': order_serializer.data,
+                'redirect_url': '/cart'
+            }, status=status.HTTP_200_OK)
 
         except Exception as e:
             logger.error(f"Error on payment cancel: {str(e)}", exc_info=True)
             return Response({
                 'error': 'Failed to cancel order',
-                'message': str(e)
+                'message': str(e),
+                'redirect_url': '/cart'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
@@ -388,7 +460,7 @@ class PaymentStatusView(APIView):
                 })
                 
             except stripe.error.StripeError as e:
-                logger.error(f"Error retrieving payment intent {order.stripe_payment_intent_id}: {str(e)}")
+                logger.error(f"Ошибка при оплате {order.stripe_payment_intent_id}: {str(e)}")
                 response_data['payment_status'] = 'unknown'
                 response_data['error'] = str(e)
         
@@ -403,6 +475,6 @@ class StripeConfigView(APIView):
 
     def get(self, request):
         return Response({
-            'stripe_public_key': settings.STRIPE_PUBLIC_KEY,
+            'stripe_public_key': getattr(settings, 'STRIPE_PUBLIC_KEY', ''),
             'stripe_api_version': '2023-10-16'
         }, status=status.HTTP_200_OK)

@@ -1,14 +1,15 @@
-"""
-Формы для пользователей.
-ВНИМАНИЕ: Этот файл используется только для административной части (admin panel).
-Для API используются сериализаторы в serializers.py.
-"""
-
 from django import forms
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm
 from django.contrib.auth import get_user_model
 from django.core.validators import RegexValidator
 from django.utils.html import strip_tags
+
+from django.contrib.auth.forms import PasswordResetForm
+from django.contrib.auth.tokens import default_token_generator
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
 
 User = get_user_model()
 
@@ -190,3 +191,41 @@ class CustomUserUpdateForm(forms.ModelForm):
                 cleaned_data[field] = strip_tags(cleaned_data[field])
         
         return cleaned_data
+    
+class CustomPasswordResetForm(PasswordResetForm):
+    """
+    Кастомная форма для сброса пароля с ссылкой на React фронтенд
+    """
+    def send_mail(self, subject_template_name, email_template_name,
+                  context, from_email, to_email, html_email_template_name=None):
+        
+        print("=" * 50)
+        print("Sending password reset email")
+        print(f"To: {to_email}")
+        print(f"User: {context.get('user')}")
+        print("=" * 50)
+        
+        """
+        Переопределяем отправку письма с нашей ссылкой
+        """
+        # Получаем пользователя из контекста
+        user = context['user']
+        
+        # Генерируем uid и token
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        token = default_token_generator.make_token(user)
+        
+        # Создаём ссылку на React фронтенд
+        reset_link = f'http://localhost:3000/password-reset/confirm/{uid}/{token}/'
+        
+        # Обновляем контекст с нашей ссылкой
+        context['reset_link'] = reset_link
+        context['site_name'] = 'Mark Tailor'
+        
+        # Формируем письмо
+        subject = render_to_string(subject_template_name, context)
+        subject = ''.join(subject.splitlines())
+        email_message = render_to_string(email_template_name, context)
+        
+        # Отправляем письмо
+        send_mail(subject, email_message, from_email, [to_email])

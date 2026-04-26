@@ -1,10 +1,12 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 import logging
+import stripe
+from django.conf import settings
 
 from .models import Order, OrderItem
 from .serializers import (
@@ -17,6 +19,9 @@ from cart.views import CartMixin
 from decimal import Decimal
 
 logger = logging.getLogger(__name__)
+
+# Настройка Stripe
+stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
 class CheckoutView(APIView):
@@ -41,9 +46,25 @@ class CheckoutView(APIView):
         cart_data = {
             'id': cart.id,
             'total_items': cart.total_items,
-            'subtotal': cart.subtotal,
-            'items': cart_items
+            'subtotal': float(cart.subtotal),
+            'items': []
         }
+        
+        for item in cart_items:
+            cart_data['items'].append({
+                'id': item.id,
+                'product_id': item.product.id,
+                'product_name': item.product.name,
+                'product_slug': item.product.slug,
+                'product_price': float(item.product.price),
+                'size_id': item.product_size.id,
+                'size_name': item.product_size.size.name,
+                'quantity': item.quantity,
+                'subtotal': float(item.product.price * item.quantity),
+                'stock_available': item.product_size.stock,
+                'product_image': item.product.main_image.url if item.product.main_image else None
+            })
+        
         cart_serializer = CartSerializer(cart_data)
         
         user_data = {
@@ -52,6 +73,11 @@ class CheckoutView(APIView):
             'email': request.user.email,
             'phone': getattr(request.user, 'phone', ''),
             'address1': getattr(request.user, 'address1', ''),
+            'address2': getattr(request.user, 'address2', ''),
+            'city': getattr(request.user, 'city', ''),
+            'country': getattr(request.user, 'country', ''),
+            'province': getattr(request.user, 'province', ''),
+            'postal_code': getattr(request.user, 'postal_code', ''),
         }
         
         return Response({
@@ -89,28 +115,32 @@ class CheckoutView(APIView):
         
         validated_data = serializer.validated_data
         total_price = cart.subtotal
+        delivery_method = validated_data.get('delivery_method', 'pickup')
         
         try:
+            # Создаем заказ
             order = Order.objects.create(
                 user=request.user,
                 first_name=validated_data['first_name'],
                 last_name=validated_data['last_name'],
                 email=validated_data.get('email') or request.user.email,
                 company=validated_data.get('company', ''),
-                address1=validated_data['address1'],
-                address2=validated_data.get('address2', ''),
-                city=validated_data['city'],
-                country=validated_data['country'],
-                province=validated_data['province'],
-                postal_code=validated_data['postal_code'],
-                phone=validated_data['phone'],
+                # Адрес сохраняем только для курьерской доставки
+                address1=validated_data.get('address1', '') if delivery_method == 'courier' else '',
+                address2=validated_data.get('address2', '') if delivery_method == 'courier' else '',
+                city=validated_data.get('city', '') if delivery_method == 'courier' else '',
+                country=validated_data.get('country', '') if delivery_method == 'courier' else '',
+                province=validated_data.get('province', '') if delivery_method == 'courier' else '',
+                postal_code=validated_data.get('postal_code', '') if delivery_method == 'courier' else '',
+                phone=validated_data.get('phone', ''),
                 special_instructions=validated_data.get('special_instructions', ''),
                 total_price=total_price,
                 payment_provider=validated_data['payment_provider'],
             )
             
-            logger.info(f"Order created: order_id={order.id}")
+            logger.info(f"Order created: order_id={order.id}, delivery_method={delivery_method}")
             
+            # Создаем элементы заказа из корзины
             for item in cart.items.select_related('product', 'product_size'):
                 logger.debug(f"Creating order item: product={item.product.name}, "
                            f"size={item.product_size.size.name}, quantity={item.quantity}")
@@ -129,10 +159,6 @@ class CheckoutView(APIView):
             if payment_provider == 'stripe':
                 try:
                     logger.info("Creating Stripe checkout session")
-                    import stripe
-                    from django.conf import settings
-                    
-                    stripe.api_key = settings.STRIPE_SECRET_KEY
                     
                     line_items = []
                     for item in cart.items.select_related('product', 'product_size'):
@@ -151,12 +177,15 @@ class CheckoutView(APIView):
                             'quantity': item.quantity,
                         })
                     
+                    success_url = request.build_absolute_uri('/payment/stripe/success/')
+                    cancel_url = request.build_absolute_uri('/payment/stripe/cancel/')
+                    
                     checkout_session = stripe.checkout.Session.create(
                         payment_method_types=['card'],
                         line_items=line_items,
                         mode='payment',
-                        success_url=request.build_absolute_uri('/api/payment/stripe/success/') + '?session_id={CHECKOUT_SESSION_ID}',
-                        cancel_url=request.build_absolute_uri('/api/payment/stripe/cancel/') + f'?order_id={order.id}',
+                        success_url=success_url + '?session_id={CHECKOUT_SESSION_ID}',
+                        cancel_url=cancel_url + f'?order_id={order.id}',
                         metadata={'order_id': order.id}
                     )
                     
@@ -171,6 +200,7 @@ class CheckoutView(APIView):
                     raise Exception(f"Payment processing error: {str(e)}")
             
             elif payment_provider == 'heleket':
+                # Для Heleket просто очищаем корзину
                 cart.clear()
                 logger.info("Heleket payment selected (not implemented yet)")
                 checkout_url = None

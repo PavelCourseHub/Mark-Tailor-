@@ -11,7 +11,7 @@ from .views import (
     MergeCartView
 )
 
-app_name = 'cart'
+app_name = 'cart'  # Добавьте эту строку
 
 urlpatterns = [
     path('api/cart/', CartView.as_view(), name='api_cart'),

@@ -8,7 +8,7 @@ from .views import (
     FilterOptionsView
 )
 
-app_name = 'main'
+app_name = 'main'  
 
 urlpatterns = [
     path('api/', IndexView.as_view(), name='api_index'),
