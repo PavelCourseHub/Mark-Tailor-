@@ -1,6 +1,9 @@
+import apiClient from './client';
+
 export const productsAPI = {
-  getCatalog: (params) => apiClient.get('/catalog/', { params }),
-  getProduct: (slug) => apiClient.get(`/products/${slug}/`),
-  getCategories: () => apiClient.get('/categories/'),
-  getSearchSuggestions: (query) => apiClient.get('/search/suggestions/', { params: { q: query } }),
+  getCatalog: (params) => apiClient.get('/api/catalog/', { params }),
+  getProduct: (slug) => apiClient.get(`/api/products/${slug}/`),
+  getCategories: () => apiClient.get('/api/categories/'),
+  getSearchSuggestions: (query) => apiClient.get('/api/search/suggestions/', { params: { q: query } }),
+  getFilterOptions: () => apiClient.get('/api/filter-options/'),
 };

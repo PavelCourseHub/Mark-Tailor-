@@ -79,7 +79,13 @@ export const CartProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    fetchCart();
+    // Загружаем корзину только если есть токен авторизации
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      fetchCart();
+    } else {
+      setLoading(false);
+    }
   }, []);
 
   const value = {

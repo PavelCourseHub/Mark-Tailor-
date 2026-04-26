@@ -5,17 +5,18 @@ import { CartProvider } from './contexts/CartContext';
 
 // Импорт страниц
 import HomePage from './pages/HomePage';
-//import CatalogPage from './pages/CatalogPage';
-//import ProductDetailPage from './pages/ProductDetailPage';
-//import CartPage from './pages/CartPage';
-//import CheckoutPage from './pages/CheckoutPage';
-//import LoginPage from './pages/LoginPage';
-//import RegisterPage from './pages/RegisterPage';
-//import ProfilePage from './pages/ProfilePage';
-//import OrderHistoryPage from './pages/OrderHistoryPage';
-//import OrderDetailPage from './pages/OrderDetailPage';
-//import PaymentSuccess from './pages/PaymentSuccess';
-//import PaymentCancel from './pages/PaymentCancel';
+import TestPage from './pages/TestPage'; // Для тестирования
+import AuthPage from './pages/AuthPage';
+import CheckoutPage from './pages/CheckoutPage';
+import ProfilePage from './pages/ProfilePage';
+import OrderHistoryPage from './pages/OrderHistoryPage';
+import OrderDetailPage from './pages/OrderDetailPage';
+import CatalogPage from './pages/CatalogPage';
+import ProductDetailPage from './pages/ProductDetailPage';
+import CartPage from './pages/CartPage';
+import PaymentSuccess from './pages/PaymentSuccess';
+import PaymentCancel from './pages/PaymentCancel';
+import PasswordResetConfirm from './pages/PasswordResetConfirm';
 
 // Импорт компонентов
 import Header from './components/Header';
@@ -33,15 +34,7 @@ function App() {
               <Routes>
                 {/* Публичные маршруты */}
                 <Route path="/" element={<HomePage />} />
-                <Route path="/catalog" element={<CatalogPage />} />
-                <Route path="/product/:slug" element={<ProductDetailPage />} />
-                <Route path="/cart" element={<CartPage />} />
-                <Route path="/login" element={<LoginPage />} />
-                <Route path="/register" element={<RegisterPage />} />
-                <Route path="/payment/success" element={<PaymentSuccess />} />
-                <Route path="/payment/cancel" element={<PaymentCancel />} />
-                
-                {/* Защищенные маршруты (требуют авторизации) */}
+                <Route path="/login" element={<AuthPage />} />
                 <Route 
                   path="/checkout" 
                   element={
@@ -74,6 +67,24 @@ function App() {
                     </ProtectedRoute>
                   } 
                 />
+                <Route path="/catalog" element={<CatalogPage />} />
+                <Route path="/product/:slug" element={<ProductDetailPage />} />
+                <Route path="/cart" element={<CartPage />} />
+                <Route path="/payment/success" element={<PaymentSuccess />} />
+                <Route path="/payment/cancel" element={<PaymentCancel />} />
+                <Route path="/password-reset/confirm/:uidb64/:token" element={<PasswordResetConfirm />} />
+                {/* Защищенные маршруты (требуют авторизации) */}
+                {/* Раскомментируйте когда создадите эти страницы:
+                
+                <Route 
+                  path="/orders/:orderId" 
+                  element={
+                    <ProtectedRoute>
+                      <OrderDetailPage />
+                    </ProtectedRoute>
+                  } 
+                />
+                */}
                 
                 {/* 404 страница */}
                 <Route path="*" element={<NotFoundPage />} />
@@ -92,12 +103,12 @@ const NotFoundPage = () => {
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
       <h1 className="text-6xl font-bold text-gray-900 mb-4">404</h1>
-      <p className="text-xl text-gray-600 mb-8">Page not found</p>
+      <p className="text-xl text-gray-600 mb-8">Страница не найдена</p>
       <a 
         href="/" 
         className="px-6 py-3 bg-black text-white hover:bg-gray-800 transition"
       >
-        Go Back Home
+        Вернуться на главную
       </a>
     </div>
   );

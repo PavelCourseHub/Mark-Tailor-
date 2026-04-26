@@ -10,27 +10,27 @@ const Footer = () => {
           <div>
             <h3 className="text-lg font-semibold mb-4">Mark Tailor</h3>
             <p className="text-gray-400 text-sm">
-              Premium clothing tailored just for you. Quality and style since 2024.
+              Одежда премиум-класса, сшитая специально для вас. Качество и стиль с 2024 года.
             </p>
           </div>
 
-          {/* Quick Links */}
+          {/* Быстрые ссылки */}
           <div>
-            <h3 className="text-lg font-semibold mb-4">Quick Links</h3>
+            <h3 className="text-lg font-semibold mb-4">Быстрые ссылки</h3>
             <ul className="space-y-2 text-sm">
               <li>
                 <Link to="/catalog" className="text-gray-400 hover:text-white transition">
-                  Catalog
+                  Каталог
                 </Link>
               </li>
               <li>
                 <Link to="/about" className="text-gray-400 hover:text-white transition">
-                  About Us
+                  О нас
                 </Link>
               </li>
               <li>
                 <Link to="/contact" className="text-gray-400 hover:text-white transition">
-                  Contact
+                  Контакт
                 </Link>
               </li>
             </ul>
@@ -38,21 +38,21 @@ const Footer = () => {
 
           {/* Customer Service */}
           <div>
-            <h3 className="text-lg font-semibold mb-4">Customer Service</h3>
+            <h3 className="text-lg font-semibold mb-4">Обслуживание клиентов</h3>
             <ul className="space-y-2 text-sm">
               <li>
                 <Link to="/faq" className="text-gray-400 hover:text-white transition">
-                  FAQ
+                  Часто задаваемые вопросы
                 </Link>
               </li>
               <li>
                 <Link to="/shipping" className="text-gray-400 hover:text-white transition">
-                  Shipping Info
+                  Информация о доставке
                 </Link>
               </li>
               <li>
                 <Link to="/returns" className="text-gray-400 hover:text-white transition">
-                  Returns
+                  Возврат
                 </Link>
               </li>
             </ul>
@@ -60,17 +60,17 @@ const Footer = () => {
 
           {/* Contact */}
           <div>
-            <h3 className="text-lg font-semibold mb-4">Contact Us</h3>
+            <h3 className="text-lg font-semibold mb-4">Связаться с нами</h3>
             <ul className="space-y-2 text-sm text-gray-400">
-              <li>Email: info@marktailor.com</li>
-              <li>Phone: +1 234 567 890</li>
-              <li>Address: 123 Fashion St, NY 10001</li>
+              <li>Эл.почта: info@marktailor.com</li>
+              <li>Телефон: +375 29 111 11 11</li>
+              <li>Адрес: пр-т Победителей 128</li>
             </ul>
           </div>
         </div>
 
         <div className="border-t border-gray-800 mt-8 pt-8 text-center text-sm text-gray-400">
-          <p>&copy; 2024 Mark Tailor. All rights reserved.</p>
+          <p>&copy; 2024 Mark Tailor. Все права защищены.</p>
         </div>
       </div>
     </footer>

@@ -28,40 +28,40 @@ const Header = () => {
     <header className="bg-white shadow-md sticky top-0 z-50">
       <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          {/* Logo */}
-          <Link to="/" className="text-2xl font-bold text-black">
+          {/* Логотип */}
+          <Link to="/" className="text-xl font-bold text-black">
             Mark Tailor
           </Link>
 
-          {/* Desktop Navigation */}
+          {/* Навигация по рабочему столу */}
           <div className="hidden md:flex space-x-8">
             <Link to="/" className="text-gray-700 hover:text-black transition">
-              Home
+              Главная
             </Link>
             <Link to="/catalog" className="text-gray-700 hover:text-black transition">
-              Catalog
+              Каталог
             </Link>
             {user && (
               <Link to="/orders" className="text-gray-700 hover:text-black transition">
-                My Orders
+                Мои заказы
               </Link>
             )}
           </div>
 
-          {/* Search Bar - Desktop */}
+          {/* Панель поиска — рабочий стол */}
           <div className="hidden md:flex flex-1 max-w-md mx-8">
             <form onSubmit={handleSearch} className="w-full">
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search products..."
+                placeholder="Поиск товаров ..."
                 className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-black"
               />
             </form>
           </div>
 
-          {/* User Actions */}
+          {/* Действия пользователя */}
           <div className="flex items-center space-x-4">
             <Link to="/cart" className="relative">
               <svg className="w-6 h-6 text-gray-700 hover:text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -93,20 +93,20 @@ const Header = () => {
                       className="block px-4 py-2 text-gray-700 hover:bg-gray-100"
                       onClick={() => setIsMenuOpen(false)}
                     >
-                      My Profile
+                      Личный кабинет
                     </Link>
                     <Link
                       to="/orders"
                       className="block px-4 py-2 text-gray-700 hover:bg-gray-100"
                       onClick={() => setIsMenuOpen(false)}
                     >
-                      My Orders
+                      Мои заказы
                     </Link>
                     <button
                       onClick={handleLogout}
                       className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-gray-100"
                     >
-                      Logout
+                      Выйти
                     </button>
                   </div>
                 )}
@@ -116,7 +116,7 @@ const Header = () => {
                 to="/login"
                 className="px-4 py-2 bg-black text-white hover:bg-gray-800 transition"
               >
-                Sign In
+                Войти
               </Link>
             )}
 
@@ -149,14 +149,14 @@ const Header = () => {
               className="block py-2 text-gray-700 hover:text-black"
               onClick={() => setIsMenuOpen(false)}
             >
-              Home
+              Главная
             </Link>
             <Link
               to="/catalog"
               className="block py-2 text-gray-700 hover:text-black"
               onClick={() => setIsMenuOpen(false)}
             >
-              Catalog
+              Каталог
             </Link>
             {user && (
               <>
@@ -165,14 +165,14 @@ const Header = () => {
                   className="block py-2 text-gray-700 hover:text-black"
                   onClick={() => setIsMenuOpen(false)}
                 >
-                  My Orders
+                  Мои заказы
                 </Link>
                 <Link
                   to="/profile"
                   className="block py-2 text-gray-700 hover:text-black"
                   onClick={() => setIsMenuOpen(false)}
                 >
-                  My Profile
+                  Личный кабинет
                 </Link>
                 <button
                   onClick={() => {
@@ -181,7 +181,7 @@ const Header = () => {
                   }}
                   className="block w-full text-left py-2 text-gray-700 hover:text-black"
                 >
-                  Logout
+                  Выйти
                 </button>
               </>
             )}
@@ -191,7 +191,7 @@ const Header = () => {
                 className="block py-2 text-gray-700 hover:text-black"
                 onClick={() => setIsMenuOpen(false)}
               >
-                Sign In
+                Войти
               </Link>
             )}
           </div>

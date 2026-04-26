@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { productsAPI } from '../api/products';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
+import PlaceholderImage from '../components/PlaceholderImage';
 
 const HomePage = () => {
   const [categories, setCategories] = useState([]);
@@ -30,8 +31,8 @@ const HomePage = () => {
       setFeaturedProducts(response.data.products);
       
     } catch (err) {
-      console.error('Error fetching home data:', err);
-      setError('Failed to load products. Please try again later.');
+      console.error('Ошибка при получении данных о домашнем аккаунте:', err);
+      setError('Не удалось загрузить товары. Пожалуйста, попробуйте позже.');
     } finally {
       setLoading(false);
     }
@@ -42,13 +43,13 @@ const HomePage = () => {
       const result = await addToCart(product.slug, sizeId, 1);
       if (result.success) {
         // Показываем уведомление (можно добавить toast уведомления)
-        alert(`${product.name} added to cart!`);
+        alert(`${product.name} добавлен в корзину!`);
       } else {
-        alert(result.error || 'Failed to add to cart');
+        alert(result.error || 'Не удалось добавить в корзину');
       }
     } catch (error) {
-      console.error('Add to cart error:', error);
-      alert('Failed to add to cart');
+      console.error('Ошибка добавления в корзину:', error);
+      alert('Не удалось добавить в корзину');
     }
   };
 
@@ -69,7 +70,7 @@ const HomePage = () => {
             onClick={fetchHomeData}
             className="mt-4 px-6 py-2 bg-black text-white hover:bg-gray-800 transition"
           >
-            Try Again
+            Попробуйте еще раз
           </button>
         </div>
       </div>
@@ -104,30 +105,28 @@ const HeroSection = ({ user }) => {
   return (
     <div className="relative bg-black text-white">
       <div className="absolute inset-0">
-        <img
-          className="w-full h-full object-cover opacity-50"
-          src="/api/placeholder/1920/600"
-          alt="Hero background"
-        />
+        <div className="w-full h-full bg-gray-800 flex items-center justify-center opacity-50">
+          <span className="text-white text-4xl">Mark Tailor</span>
+        </div>
       </div>
       <div className="relative max-w-7xl mx-auto px-4 py-24 sm:px-6 lg:px-8 text-center">
         <h1 className="text-4xl md:text-6xl font-bold tracking-tight">
-          Welcome to Mark Tailor
+          Добро пожаловать в Mark Tailor
         </h1>
         <p className="mt-6 text-xl max-w-2xl mx-auto">
-          Discover our collection of premium clothing tailored just for you
+          Откройте для себя нашу коллекцию одежды премиум-класса, созданную специально для вас
         </p>
         <div className="mt-10">
           <Link
             to="/catalog"
             className="inline-block bg-white text-black px-8 py-3 text-lg font-semibold hover:bg-gray-100 transition"
           >
-            Shop Now
+            Купить сейчас
           </Link>
         </div>
         {user && (
           <p className="mt-4 text-sm">
-            Welcome back, {user.first_name}!
+            Добро пожаловать, {user.first_name}!
           </p>
         )}
       </div>
@@ -141,7 +140,7 @@ const CategoriesSection = ({ categories }) => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-16 sm:px-6 lg:px-8">
-      <h2 className="text-3xl font-bold text-center mb-12">Shop by Category</h2>
+      <h2 className="text-3xl font-bold text-center mb-12">Магазин по категориям</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {categories.map((category) => (
           <Link
@@ -150,16 +149,20 @@ const CategoriesSection = ({ categories }) => {
             className="group relative overflow-hidden rounded-lg shadow-lg hover:shadow-xl transition"
           >
             <div className="aspect-w-16 aspect-h-9">
-              <img
-                src={category.image_url || '/api/placeholder/400/300'}
-                alt={category.name}
-                className="w-full h-64 object-cover group-hover:scale-105 transition duration-300"
-              />
+              {category.image_url ? (
+                <img
+                  src={category.image_url}
+                  alt={category.name}
+                  className="w-full h-64 object-cover group-hover:scale-105 transition duration-300"
+                />
+              ) : (
+                <PlaceholderImage width={400} height={300} text={category.name} />
+              )}
             </div>
             <div className="absolute inset-0 bg-black bg-opacity-40 group-hover:bg-opacity-30 transition">
               <div className="absolute bottom-0 left-0 right-0 p-4 text-white text-center">
                 <h3 className="text-xl font-semibold">{category.name}</h3>
-                <p className="text-sm mt-1">Shop Now →</p>
+                <p className="text-sm mt-1">Купить сейчас →</p>
               </div>
             </div>
           </Link>
@@ -175,7 +178,7 @@ const FeaturedProductsSection = ({ products, onAddToCart }) => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-16 sm:px-6 lg:px-8">
-      <h2 className="text-3xl font-bold text-center mb-12">Featured Products</h2>
+      <h2 className="text-3xl font-bold text-center mb-12">Рекомендуемые продукты</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {products.map((product) => (
           <ProductCard 
@@ -190,7 +193,7 @@ const FeaturedProductsSection = ({ products, onAddToCart }) => {
           to="/catalog"
           className="inline-block border-2 border-black text-black px-8 py-3 font-semibold hover:bg-black hover:text-white transition"
         >
-          View All Products
+          Просмотреть все продукты
         </Link>
       </div>
     </div>
@@ -216,7 +219,7 @@ const ProductCard = ({ product, onAddToCart }) => {
           />
           {product.stock === 0 && (
             <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 text-sm">
-              Sold Out
+              Распродажа
             </div>
           )}
         </div>
@@ -240,7 +243,7 @@ const ProductCard = ({ product, onAddToCart }) => {
                 : 'bg-black text-white hover:bg-gray-800'
             }`}
           >
-            Add to Cart
+            Добавить в корзину
           </button>
         </div>
       </div>
@@ -253,13 +256,13 @@ const PromoBanner = () => {
   return (
     <div className="bg-gray-900 text-white">
       <div className="max-w-7xl mx-auto px-4 py-12 sm:px-6 lg:px-8 text-center">
-        <h2 className="text-3xl font-bold mb-4">Summer Collection 2024</h2>
-        <p className="text-xl mb-6">Get up to 30% off on selected items</p>
+        <h2 className="text-3xl font-bold mb-4">Летняя коллекция 2026 года</h2>
+        <p className="text-xl mb-6">Скидка до 30% на отдельные товары.</p>
         <Link
           to="/catalog"
           className="inline-block bg-white text-black px-8 py-3 font-semibold hover:bg-gray-100 transition"
         >
-          Shop Sale
+          Распродажа в магазине
         </Link>
       </div>
     </div>
@@ -289,14 +292,14 @@ const NewsletterSection = () => {
   return (
     <div className="bg-gray-100">
       <div className="max-w-7xl mx-auto px-4 py-16 sm:px-6 lg:px-8 text-center">
-        <h2 className="text-3xl font-bold mb-4">Subscribe to Our Newsletter</h2>
+        <h2 className="text-3xl font-bold mb-4">Подпишитесь на нашу рассылку</h2>
         <p className="text-gray-600 mb-8">
-          Get the latest updates on new products and special offers
+          Получайте самую свежую информацию о новых продуктах и ​​специальных предложениях.
         </p>
         
         {subscribed ? (
           <div className="max-w-md mx-auto bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
-            Thank you for subscribing!
+            Спасибо за подписку!
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="max-w-md mx-auto flex flex-col sm:flex-row gap-4">
@@ -304,7 +307,7 @@ const NewsletterSection = () => {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter your email"
+              placeholder="Введите свой email"
               className="flex-1 px-4 py-3 border border-gray-300 focus:outline-none focus:border-black"
               required
             />
@@ -312,7 +315,7 @@ const NewsletterSection = () => {
               type="submit"
               className="px-6 py-3 bg-black text-white font-semibold hover:bg-gray-800 transition"
             >
-              Subscribe
+              Подписаться
             </button>
           </form>
         )}
