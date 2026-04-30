@@ -204,6 +204,11 @@ const FeaturedProductsSection = ({ products, onAddToCart }) => {
 const ProductCard = ({ product, onAddToCart }) => {
   const [isHovered, setIsHovered] = useState(false);
 
+    // 👇 СТРОКИ ДЛЯ ОТЛАДКИ
+  console.log('Product:', product.name);
+  console.log('Image URL:', product.image_url);
+  console.log('Full product object:', product);
+
   return (
     <div 
       className="group bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition"
@@ -213,9 +218,16 @@ const ProductCard = ({ product, onAddToCart }) => {
       <Link to={`/product/${product.slug}`} className="block">
         <div className="relative overflow-hidden">
           <img
-            src={product.image_url || '/api/placeholder/300/400'}
+            //src={product.image_url || '/api/placeholder/300/400'}
+            src={`http://localhost:8000${product.image_url}`}
             alt={product.name}
-            className="w-full h-64 object-cover group-hover:scale-110 transition duration-300"
+            className="w-full h-64 object-contain group-hover:scale-110 transition duration-300"
+          
+            onError={(e) => {
+              console.error('Image load error - URL:', product.image_url);
+              e.target.src = 'https://placehold.co/300x400/e5e7eb/9ca3af?text=No+Image';
+            }}
+          
           />
           {product.stock === 0 && (
             <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 text-sm">

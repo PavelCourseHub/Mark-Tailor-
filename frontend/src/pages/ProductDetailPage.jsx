@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { productsAPI } from "../api/products";
 import { useCart } from "../contexts/CartContext";
+import PlaceholderImage from '../components/PlaceholderImage';
 
 const ProductDetailPage = () => {
   const { slug } = useParams();
@@ -12,7 +13,19 @@ const ProductDetailPage = () => {
   const [quantity, setQuantity] = useState(1);
   const [selectedSize, setSelectedSize] = useState(null);
   const [addingToCart, setAddingToCart] = useState(false);
+  
+  // Для слайдера
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [allImages, setAllImages] = useState([]);
+  
   const { addToCart } = useCart();
+
+  // Функция для получения правильного URL изображения
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) return null;
+    if (imagePath.startsWith('http')) return imagePath;
+    return `http://localhost:8000${imagePath}`;
+  };
 
   useEffect(() => {
     fetchProductDetail();
@@ -25,12 +38,36 @@ const ProductDetailPage = () => {
       setProduct(response.data.product);
       setRelatedProducts(response.data.related_products || []);
       
+      // Собираем все изображения для слайдера
+      const images = [];
+      
+      // Добавляем главное изображение
+      if (response.data.product.main_image) {
+        images.push({
+          id: 'main',
+          image: response.data.product.main_image,
+          alt_text: response.data.product.name
+        });
+      }
+      
+      // Добавляем дополнительные изображения
+      if (response.data.product.images && response.data.product.images.length > 0) {
+        images.push(...response.data.product.images);
+      }
+      
+      setAllImages(images);
+      
+      // Устанавливаем первое изображение как выбранное
+      if (images.length > 0) {
+        setSelectedImage(images[0].image);
+      }
+      
       // Auto-select first available size
       if (response.data.product.sizes && response.data.product.sizes.length > 0) {
         setSelectedSize(response.data.product.sizes[0]);
       }
     } catch (error) {
-      console.error("Error fetching product:", error);
+      console.error("Ошибка при получении товара:", error);
       navigate("/catalog");
     } finally {
       setLoading(false);
@@ -107,17 +144,49 @@ const ProductDetailPage = () => {
         {/* Product Detail */}
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-6">
-            {/* Product Image */}
+            {/* Product Images with Slider */}
             <div>
-              {product.image_url ? (
-                <img
-                    src={product.image_url}
+              {/* Main Image */}
+              <div className="mb-4">
+                {selectedImage ? (
+                  <img
+                    src={getImageUrl(selectedImage)}
                     alt={product.name}
-                    className="w-full h-auto object-cover rounded-lg"
-                />
+                    className="w-full h-96 object-contain rounded-lg"
+                    onError={(e) => {
+                      e.target.src = 'https://placehold.co/500x600/e5e7eb/9ca3af?text=No+Image';
+                    }}
+                  />
                 ) : (
-                <PlaceholderImage width={500} height={600} text={product.name} />
+                  <PlaceholderImage width={500} height={600} text={product.name} />
                 )}
+              </div>
+              
+              {/* Thumbnails Slider */}
+              {allImages.length > 1 && (
+                <div className="flex gap-2 overflow-x-auto pb-2">
+                  {allImages.map((img, index) => (
+                    <button
+                      key={img.id || index}
+                      onClick={() => setSelectedImage(img.image)}
+                      className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition ${
+                        selectedImage === img.image 
+                          ? 'border-black' 
+                          : 'border-gray-200 hover:border-gray-400'
+                      }`}
+                    >
+                      <img
+                        src={getImageUrl(img.image)}
+                        alt={img.alt_text || product.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.src = 'https://placehold.co/100x100/e5e7eb/9ca3af?text=No+Image';
+                        }}
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Product Info */}
@@ -191,7 +260,7 @@ const ProductDetailPage = () => {
                   </button>
                 </div>
                 <p className="text-sm text-gray-500 mt-1">
-                  {selectedSize?.stock || 0} items available
+                  {selectedSize?.stock || 0} товаров доступно
                 </p>
               </div>
 
@@ -219,9 +288,12 @@ const ProductDetailPage = () => {
                 >
                   <Link to={`/product/${related.slug}`}>
                     <img
-                      src={related.image_url || "/api/placeholder/300/400"}
+                      src={getImageUrl(related.image_url)}
                       alt={related.name}
                       className="w-full h-48 object-cover hover:scale-105 transition duration-300"
+                      onError={(e) => {
+                        e.target.src = 'https://placehold.co/300x400/e5e7eb/9ca3af?text=No+Image';
+                      }}
                     />
                   </Link>
                   <div className="p-4">

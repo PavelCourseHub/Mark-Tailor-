@@ -268,9 +268,13 @@ const CatalogPage = () => {
                 <Link to={`/product/${product.slug}`}>
                   {product.image_url ? (
                     <img
-                        src={product.image_url}
+                        //src={product.image_url}
+                        src={`http://localhost:8000${product.image_url}`}
                         alt={product.name}
-                        className="w-full h-64 object-cover hover:scale-105 transition duration-300"
+                        className="w-full h-64 object-scale-down hover:scale-105 transition duration-300"
+                        onError={(e) => {
+                          e.target.src = 'https://placehold.co/300x400/e5e7eb/9ca3af?text=No+Image';
+                        }}
                     />
                     ) : (
                     <PlaceholderImage width={300} height={400} text={product.name} />
