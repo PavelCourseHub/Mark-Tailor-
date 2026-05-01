@@ -61,9 +61,13 @@ class CatalogView(APIView):
         # Фильтрация по категории
         category_slug = filters.get('category')
         current_category = None
+
         if category_slug:
-            current_category = get_object_or_404(Category, slug=category_slug)
-            products = products.filter(category=current_category)
+            if category_slug == 'rasprodazha':
+                products = products.filter(is_on_sale=True)
+            else:
+                current_category = get_object_or_404(Category, slug=category_slug)
+                products = products.filter(category=current_category)
         
         # Поиск по названию и описанию
         query = filters.get('q', '')
@@ -228,7 +232,7 @@ class CategoryListView(APIView):
         #serializer = CategorySerializer(categories, many=True)
 
         # Получаем только корневые категории (без родителей)
-        root_categories = Category.objects.filter(parent__isnull=True).order_by('name')
+        root_categories = Category.objects.filter(parent__isnull=True).order_by('id')
         serializer = CategorySerializer(root_categories, many=True)
         
         return Response({

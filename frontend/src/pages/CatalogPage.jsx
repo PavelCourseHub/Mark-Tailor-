@@ -136,7 +136,7 @@ const CatalogPage = () => {
                   name="q"
                   value={filters.q}
                   onChange={handleFilterChange}
-                  placeholder="Search products..."
+                  placeholder="Поиск товаров..."
                   className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-black"
                 />
               </div>
@@ -184,7 +184,7 @@ const CatalogPage = () => {
               {/* Min Price */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Минимальная цена (BYN)
+                  Мин. цена (BYN)
                 </label>
                 <input
                   type="number"
@@ -199,7 +199,7 @@ const CatalogPage = () => {
               {/* Max Price */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Максимальная цена (BYN)
+                  Макс. цена (BYN)
                 </label>
                 <input
                   type="number"
@@ -222,10 +222,10 @@ const CatalogPage = () => {
                   onChange={handleFilterChange}
                   className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-black"
                 >
-                  <option value="-created_at">Новый</option>
-                  <option value="price">Цена: от низкой до высокой</option>
-                  <option value="-price">Цена: от высокой к низкой</option>
-                  <option value="name">Название: От А до Я</option>
+                  <option value="-created_at">Новинки</option>
+                  <option value="price">Цена: по возрастанию</option>
+                  <option value="-price">Цена: по убыванию</option>
+                  <option value="name">Название: А-Я</option>
                 </select>
               </div>
             </div>
@@ -263,41 +263,69 @@ const CatalogPage = () => {
             {products.map((product) => (
               <div
                 key={product.id}
-                className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition"
+                className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition relative"
               >
+                {/* Бейдж со скидкой */}
+                {product.discount_percent > 0 && (
+                  <div className="absolute top-2 right-2 z-10">
+                    <div className="bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full shadow-md">
+                      -{product.discount_percent}%
+                    </div>
+                  </div>
+                )}
+
                 <Link to={`/product/${product.slug}`}>
                   {product.image_url ? (
                     <img
-                        //src={product.image_url}
-                        src={`http://localhost:8000${product.image_url}`}
-                        alt={product.name}
-                        className="w-full h-64 object-scale-down hover:scale-105 transition duration-300"
-                        onError={(e) => {
-                          e.target.src = 'https://placehold.co/300x400/e5e7eb/9ca3af?text=No+Image';
-                        }}
+                      src={`http://localhost:8000${product.image_url}`}
+                      alt={product.name}
+                      className="w-full h-64 object-cover hover:scale-105 transition duration-300"
+                      onError={(e) => {
+                        e.target.src = 'https://placehold.co/300x400/e5e7eb/9ca3af?text=No+Image';
+                      }}
                     />
-                    ) : (
+                  ) : (
                     <PlaceholderImage width={300} height={400} text={product.name} />
-                    )}
+                  )}
                 </Link>
+                
                 <div className="p-4">
                   <Link to={`/product/${product.slug}`}>
-                    <h3 className="font-semibold text-gray-900 hover:text-gray-600 transition">
+                    <h3 className="font-semibold text-gray-900 hover:text-gray-600 transition line-clamp-2 min-h-[56px]">
                       {product.name}
                     </h3>
                   </Link>
                   <p className="text-sm text-gray-500 mt-1">{product.category_name}</p>
-                  <div className="flex justify-between items-center mt-3">
-                    <span className="text-xl font-bold text-gray-900">
-                      {formatPrice(product.price)}
-                    </span>
-                    <button
-                      onClick={() => handleAddToCart(product)}
-                      className="px-4 py-2 bg-black text-white rounded hover:bg-gray-800 transition text-sm"
-                    >
-                      Добавить в корзину
-                    </button>
+                  
+                  {/* Цены со скидкой */}
+                  <div className="mt-2">
+                    {product.is_on_sale ? (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-lg font-bold text-red-600">
+                          {Number(product.sale_price).toFixed(2)} BYN
+                        </span>
+                        <span className="text-sm text-gray-400 line-through">
+                          {Number(product.price).toFixed(2)} BYN
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-lg font-bold text-gray-900">
+                        {Number(product.price).toFixed(2)} BYN
+                      </span>
+                    )}
                   </div>
+                  
+                  <button
+                    onClick={() => handleAddToCart(product)}
+                    disabled={product.stock === 0}
+                    className={`mt-3 w-full py-2 text-sm font-semibold transition rounded ${
+                      product.stock === 0
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : 'bg-black text-white hover:bg-gray-800'
+                    }`}
+                  >
+                    {product.stock === 0 ? 'Нет в наличии' : 'В корзину'}
+                  </button>
                 </div>
               </div>
             ))}

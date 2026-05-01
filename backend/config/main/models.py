@@ -18,8 +18,6 @@ class Category(models.Model):
         null=True,
         verbose_name='Изображение'
     )
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
-    updated_at = models.DateTimeField(auto_now=True, verbose_name='Дата обновления')
     parent = models.ForeignKey(
         'self',
         on_delete=models.CASCADE,
@@ -28,18 +26,28 @@ class Category(models.Model):
         related_name='children',
         verbose_name='Родительская категория'
     )
+    order = models.PositiveIntegerField(default=0, verbose_name='Порядок отображения')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Дата обновления')
+    
 
     class Meta:
         verbose_name = 'Категория'
         verbose_name_plural = 'Категории'
-        ordering = ['name']
+        ordering = ['order', 'name']
 
     def save(self, *args, **kwargs):
         if not self.slug:
             self.slug = slugify(self.name)
+
+        if self.order == 0:
+            max_order = Category.objects.aggregate(max_order=models.Max('order'))['max_order']
+            self.order = (max_order or 0) + 1
         super().save(*args, **kwargs)
 
     def __str__(self):
+        if self.parent:
+            return f"{self.parent.name} → {self.name}"
         return self.name
 
 
@@ -98,23 +106,44 @@ class Product(models.Model):
     is_featured = models.BooleanField(default=False, verbose_name='Рекомендуемый')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='Дата обновления')
-
-    class Meta:
-        verbose_name = 'Товар'
-        verbose_name_plural = 'Товары'
-        ordering = ['-created_at']
-        indexes = [
-            models.Index(fields=['slug']),
-            models.Index(fields=['category', 'is_active']),
-            models.Index(fields=['price']),
-            models.Index(fields=['created_at']),
-        ]
-
+    
+    # Поля для скидок
+    discount_percent = models.PositiveIntegerField(
+        default=0,
+        verbose_name='Скидка (%)',
+        help_text='Процент скидки на товар (0-100)'
+    )
+    is_on_sale = models.BooleanField(
+        default=False,
+        verbose_name='Участвует в распродаже'
+    )
+    sale_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        verbose_name='Цена со скидкой',
+        help_text='Автоматически рассчитывается из цены и процента скидки'
+    )
+    
+    def calculate_sale_price(self):
+        """Рассчитать цену со скидкой"""
+        if self.discount_percent > 0:
+            # Преобразуем проценты в Decimal
+            discount = Decimal(self.discount_percent) / Decimal(100)
+            return self.price * (Decimal(1) - discount)
+        return self.price
+    
     def save(self, *args, **kwargs):
+        # Генерация slug
         if not self.slug:
             self.slug = slugify(self.name)
+        
+        # Автоматически рассчитываем цену со скидкой
+        self.sale_price = self.calculate_sale_price()
+        self.is_on_sale = self.discount_percent > 0
+        
         super().save(*args, **kwargs)
-
+    
     def __str__(self):
         return self.name
 
@@ -128,8 +157,18 @@ class Product(models.Model):
 
     def get_average_rating(self):
         """Получить средний рейтинг товара"""
-        # Здесь можно добавить логику рейтинга
         return 0
+
+    class Meta:
+        verbose_name = 'Товар'
+        verbose_name_plural = 'Товары'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['slug']),
+            models.Index(fields=['category', 'is_active']),
+            models.Index(fields=['price']),
+            models.Index(fields=['created_at']),
+        ]
 
 
 class ProductSize(models.Model):

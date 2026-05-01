@@ -104,6 +104,14 @@ const ProductDetailPage = () => {
     setAddingToCart(false);
   };
 
+  // Функция для получения цены со скидкой
+  const getCurrentPrice = () => {
+    if (product.is_on_sale) {
+      return product.sale_price;
+    }
+    return product.price;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -143,11 +151,20 @@ const ProductDetailPage = () => {
 
         {/* Product Detail */}
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
+          {/* Бейдж со скидкой на странице товара */}
+          {product.discount_percent > 0 && (
+            <div className="absolute top-4 right-4 z-20 ml-4 mt-4">
+              <div className="bg-red-600 text-white text-sm font-bold px-3 py-1.5 rounded-full shadow-md">
+                Скидка -{product.discount_percent}%
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-6">
             {/* Product Images with Slider */}
             <div>
               {/* Main Image */}
-              <div className="mb-4">
+              <div className="mb-4 relative">
                 {selectedImage ? (
                   <img
                     src={getImageUrl(selectedImage)}
@@ -194,10 +211,25 @@ const ProductDetailPage = () => {
               <h1 className="text-3xl font-bold text-gray-900 mb-2">{product.name}</h1>
               <p className="text-gray-500 mb-4">{product.category_name}</p>
               
+              {/* Цены со скидкой */}
               <div className="mb-4">
-                <span className="text-3xl font-bold text-gray-900">
-                  {formatPrice(product.price)}
-                </span>
+                {product.is_on_sale ? (
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <span className="text-3xl font-bold text-red-600">
+                      {Number(product.sale_price).toFixed(2)} BYN
+                    </span>
+                    <span className="text-xl text-gray-400 line-through">
+                      {Number(product.price).toFixed(2)} BYN
+                    </span>
+                    <span className="bg-red-600 text-white text-sm font-bold px-3 py-1 rounded-full">
+                      -{product.discount_percent}%
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-3xl font-bold text-gray-900">
+                    {Number(product.price).toFixed(2)} BYN
+                  </span>
+                )}
               </div>
 
               <div className="mb-6">
@@ -270,7 +302,9 @@ const ProductDetailPage = () => {
                 disabled={addingToCart || !selectedSize || selectedSize.stock === 0}
                 className="w-full py-3 bg-black text-white rounded font-semibold hover:bg-gray-800 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
-                {addingToCart ? "Добавление..." : `Добавить в корзину - ${formatPrice(product.price * quantity)}`}
+                {addingToCart 
+                  ? "Добавление..." 
+                  : `Добавить в корзину - ${formatPrice(getCurrentPrice() * quantity)}`}
               </button>
             </div>
           </div>
@@ -284,8 +318,17 @@ const ProductDetailPage = () => {
               {relatedProducts.map((related) => (
                 <div
                   key={related.id}
-                  className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition"
+                  className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition relative"
                 >
+                  {/* Бейдж со скидкой для связанных товаров */}
+                  {related.discount_percent > 0 && (
+                    <div className="absolute top-2 right-2 z-10">
+                      <div className="bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full">
+                        -{related.discount_percent}%
+                      </div>
+                    </div>
+                  )}
+
                   <Link to={`/product/${related.slug}`}>
                     <img
                       src={getImageUrl(related.image_url)}
@@ -298,13 +341,28 @@ const ProductDetailPage = () => {
                   </Link>
                   <div className="p-4">
                     <Link to={`/product/${related.slug}`}>
-                      <h3 className="font-semibold text-gray-900 hover:text-gray-600 transition">
+                      <h3 className="font-semibold text-gray-900 hover:text-gray-600 transition line-clamp-2 min-h-[56px]">
                         {related.name}
                       </h3>
                     </Link>
-                    <p className="text-xl font-bold text-gray-900 mt-2">
-                      {formatPrice(related.price)}
-                    </p>
+                    
+                    {/* Цены для связанных товаров */}
+                    <div className="mt-2">
+                      {related.is_on_sale ? (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-lg font-bold text-red-600">
+                            {Number(related.sale_price).toFixed(2)} BYN
+                          </span>
+                          <span className="text-sm text-gray-400 line-through">
+                            {Number(related.price).toFixed(2)} BYN
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-lg font-bold text-gray-900">
+                          {Number(related.price).toFixed(2)} BYN
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}

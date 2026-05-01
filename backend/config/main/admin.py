@@ -1,47 +1,71 @@
 from django.contrib import admin
-from .models import Category, Size, Product, ProductImage, ProductSize
-
-
-class ProductImageInline(admin.TabularInline):
-    model = ProductImage
-    extra = 1
+from django.utils.html import format_html
+from .models import Category, Product, Size, ProductSize, ProductImage
 
 
 class ProductSizeInline(admin.TabularInline):
     model = ProductSize
     extra = 1
+    fields = ('size', 'stock')
 
 
-class ProductAdmin(admin.ModelAdmin):
-    list_display = ['name', 'category', 'color', 'price']
-    list_filter = ['category', 'color']
-    search_fields = ['name', 'color', 'description']
-    prepopulated_fields = {'slug': ('name',)}
-    inlines = [ProductImageInline, ProductSizeInline]
+class ProductImageInline(admin.TabularInline):
+    model = ProductImage
+    extra = 1
+    fields = ('image', 'alt_text', 'sort_order')
 
 
+@admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
-    list_display = ['name', 'parent', 'slug']
-    prepopulated_fields = {'slug': ('name',)}
-
-    #list_filter = ('parent',)
-    #search_fields = ('name', 'slug')
-    #list_select_related = ('parent',)
+    list_display = ('name', 'parent', 'order', 'slug')
+    list_filter = ('parent',)
+    search_fields = ('name', 'slug')
+    list_editable = ('order',)
+    list_select_related = ('parent',)
     
-    #fieldsets = (
-    #    ('Основная информация', {
-    #        'fields': ('name', 'slug', 'parent')
-    #    }),
-    #    ('Контент', {
-    #        'fields': ('description', 'image')
-    #    }),
-    #)
+    fieldsets = (
+        ('Основная информация', {
+            'fields': ('name', 'slug', 'parent', 'order')
+        }),
+        ('Контент', {
+            'fields': ('description', 'image')
+        }),
+    )
 
 
+@admin.register(Product)
+class ProductAdmin(admin.ModelAdmin):
+    list_display = ('name', 'category', 'price', 'discount_percent', 'sale_price_display', 'is_on_sale', 'stock')
+    list_filter = ('category', 'is_on_sale')
+    list_editable = ('discount_percent',)
+    search_fields = ('name',)
+    inlines = [ProductSizeInline, ProductImageInline]
+    
+    fieldsets = (
+        ('Основная информация', {
+            'fields': ('name', 'slug', 'category', 'color', 'description')
+        }),
+        ('Цена и скидки', {
+            'fields': ('price', 'discount_percent', 'sale_price', 'is_on_sale'),
+            'classes': ('wide',)
+        }),
+        ('Изображения и наличие', {
+            'fields': ('main_image', 'stock', 'is_active', 'is_featured')
+        }),
+    )
+    readonly_fields = ('sale_price',)
+    
+    def sale_price_display(self, obj):
+        if obj.discount_percent > 0:
+            return format_html(
+                '<span style="color: red;">{} BYN</span>',
+                obj.sale_price
+            )
+        return '-'
+    sale_price_display.short_description = 'Цена со скидкой'
+
+
+@admin.register(Size)
 class SizeAdmin(admin.ModelAdmin):
-    list_display = ['name']
-
-
-admin.site.register(Category, CategoryAdmin)
-admin.site.register(Size, SizeAdmin)
-admin.site.register(Product, ProductAdmin)
+    list_display = ('name', 'value', 'sort_order')
+    list_editable = ('sort_order',)

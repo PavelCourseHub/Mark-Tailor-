@@ -42,7 +42,6 @@ const HomePage = () => {
     try {
       const result = await addToCart(product.slug, sizeId, 1);
       if (result.success) {
-        // Показываем уведомление (можно добавить toast уведомления)
         alert(`${product.name} добавлен в корзину!`);
       } else {
         alert(result.error || 'Не удалось добавить в корзину');
@@ -204,34 +203,39 @@ const FeaturedProductsSection = ({ products, onAddToCart }) => {
 const ProductCard = ({ product, onAddToCart }) => {
   const [isHovered, setIsHovered] = useState(false);
 
-    // 👇 СТРОКИ ДЛЯ ОТЛАДКИ
-  console.log('Product:', product.name);
-  console.log('Image URL:', product.image_url);
-  console.log('Full product object:', product);
-
   return (
     <div 
-      className="group bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition"
+      className="group bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition relative"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
+      {/* Бейдж со скидкой */}
+      {product.discount_percent > 0 && (
+        <div className="absolute top-2 right-2 z-10">
+          <div className="bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full shadow-md">
+            -{product.discount_percent}%
+          </div>
+        </div>
+      )}
+
       <Link to={`/product/${product.slug}`} className="block">
         <div className="relative overflow-hidden">
-          <img
-            //src={product.image_url || '/api/placeholder/300/400'}
-            src={`http://localhost:8000${product.image_url}`}
-            alt={product.name}
-            className="w-full h-64 object-contain group-hover:scale-110 transition duration-300"
-          
-            onError={(e) => {
-              console.error('Image load error - URL:', product.image_url);
-              e.target.src = 'https://placehold.co/300x400/e5e7eb/9ca3af?text=No+Image';
-            }}
-          
-          />
+          {product.image_url ? (
+            <img
+              src={`http://localhost:8000${product.image_url}`}
+              alt={product.name}
+              className="w-full h-64 object-cover group-hover:scale-105 transition duration-300"
+              onError={(e) => {
+                console.error('Image load error - URL:', product.image_url);
+                e.target.src = 'https://placehold.co/300x400/e5e7eb/9ca3af?text=No+Image';
+              }}
+            />
+          ) : (
+            <PlaceholderImage width={300} height={400} text={product.name} />
+          )}
           {product.stock === 0 && (
-            <div className="absolute top-2 right-2 bg-red-600 text-white px-2 py-1 text-sm">
-              Распродажа
+            <div className="absolute top-2 left-2 bg-gray-600 text-white px-2 py-1 text-xs rounded">
+              Нет в наличии
             </div>
           )}
         </div>
@@ -239,25 +243,41 @@ const ProductCard = ({ product, onAddToCart }) => {
       
       <div className="p-4">
         <Link to={`/product/${product.slug}`}>
-          <h3 className="text-lg font-semibold mb-2 hover:text-gray-600 transition">
+          <h3 className="font-semibold text-gray-900 hover:text-gray-600 transition line-clamp-2 min-h-[56px]">
             {product.name}
           </h3>
         </Link>
-        <p className="text-gray-600 text-sm mb-2">{product.category_name}</p>
-        <div className="flex justify-between items-center">
-          <span className="text-xl font-bold">{product.price_display}</span>
-          <button
-            onClick={() => onAddToCart(product)}
-            disabled={product.stock === 0}
-            className={`px-4 py-2 text-sm font-semibold transition ${
-              product.stock === 0
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-black text-white hover:bg-gray-800'
-            }`}
-          >
-            Добавить в корзину
-          </button>
+        <p className="text-sm text-gray-500 mt-1">{product.category_name}</p>
+        
+        {/* Цены со скидкой */}
+        <div className="mt-2">
+          {product.is_on_sale ? (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-lg font-bold text-red-600">
+                {Number(product.sale_price).toFixed(2)} BYN
+              </span>
+              <span className="text-sm text-gray-400 line-through">
+                {Number(product.price).toFixed(2)} BYN
+              </span>
+            </div>
+          ) : (
+            <span className="text-lg font-bold text-gray-900">
+              {Number(product.price).toFixed(2)} BYN
+            </span>
+          )}
         </div>
+        
+        <button
+          onClick={() => onAddToCart(product)}
+          disabled={product.stock === 0}
+          className={`mt-3 w-full py-2 text-sm font-semibold transition rounded ${
+            product.stock === 0
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              : 'bg-black text-white hover:bg-gray-800'
+          }`}
+        >
+          {product.stock === 0 ? 'Нет в наличии' : 'В корзину'}
+        </button>
       </div>
     </div>
   );
@@ -271,10 +291,10 @@ const PromoBanner = () => {
         <h2 className="text-3xl font-bold mb-4">Летняя коллекция 2026 года</h2>
         <p className="text-xl mb-6">Скидка до 30% на отдельные товары.</p>
         <Link
-          to="/catalog"
+          to="/catalog?category=rasprodazha"
           className="inline-block bg-white text-black px-8 py-3 font-semibold hover:bg-gray-100 transition"
         >
-          Распродажа в магазине
+          Перейти к распродаже
         </Link>
       </div>
     </div>
@@ -291,7 +311,6 @@ const NewsletterSection = () => {
     if (!email) return;
     
     try {
-      // Здесь будет API запрос для подписки на новости
       console.log('Subscribing email:', email);
       setSubscribed(true);
       setTimeout(() => setSubscribed(false), 3000);
@@ -306,7 +325,7 @@ const NewsletterSection = () => {
       <div className="max-w-7xl mx-auto px-4 py-16 sm:px-6 lg:px-8 text-center">
         <h2 className="text-3xl font-bold mb-4">Подпишитесь на нашу рассылку</h2>
         <p className="text-gray-600 mb-8">
-          Получайте самую свежую информацию о новых продуктах и ​​специальных предложениях.
+          Получайте самую свежую информацию о новых продуктах и специальных предложениях.
         </p>
         
         {subscribed ? (
@@ -320,12 +339,12 @@ const NewsletterSection = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Введите свой email"
-              className="flex-1 px-4 py-3 border border-gray-300 focus:outline-none focus:border-black"
+              className="flex-1 px-4 py-3 border border-gray-300 focus:outline-none focus:border-black rounded"
               required
             />
             <button
               type="submit"
-              className="px-6 py-3 bg-black text-white font-semibold hover:bg-gray-800 transition"
+              className="px-6 py-3 bg-black text-white font-semibold hover:bg-gray-800 transition rounded"
             >
               Подписаться
             </button>
