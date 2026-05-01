@@ -118,6 +118,28 @@ code {
 @tailwind components;
 @tailwind utilities;
 
+/* Базовые сбросы */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #f9fafb;
+}
+
+/* Убираем ограничения с #root */
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+/* Остальные стили */
 @layer base {
   body {
     @apply bg-gray-50 text-gray-900;
@@ -126,6 +148,6 @@ code {
 
 @layer components {
   .container-custom {
-    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+    @apply w-full px-4 sm:px-6 lg:px-8;
   }
 }

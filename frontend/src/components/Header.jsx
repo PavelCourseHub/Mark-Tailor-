@@ -129,7 +129,7 @@ const Header = () => {
 
   return (
     <header className="bg-white shadow-md sticky top-0 z-50">
-      <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="w-full px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Логотип */}
           <Link to="/" className="text-2xl font-bold text-black tracking-wide font-serif mr-12">
@@ -327,7 +327,7 @@ const Header = () => {
             )}
           </div>
         )}
-      </nav>
+      </div>
     </header>
   );
 };
