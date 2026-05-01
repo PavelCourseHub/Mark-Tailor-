@@ -36,9 +36,9 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     try {
-      console.log('Login attempt with email:', email);
+      console.log('Попытка входа через электронную почту:', email);
       const response = await authAPI.login({ email: email, password: password });
-      console.log('Login response:', response.data); // Для отладки
+      console.log('Ответ на вход:', response.data); // Для отладки
       
       // Сохраняем токены
       if (response.data.access) {
@@ -50,6 +50,7 @@ export const AuthProvider = ({ children }) => {
       
       // Сохраняем пользователя
       setUser(response.data.user);
+      window.location.href = '/';  // Перенаправление на главную после входа на профиль
       
       return { success: true, user: response.data.user };
     } catch (error) {
