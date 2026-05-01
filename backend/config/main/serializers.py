@@ -5,16 +5,23 @@ from decimal import Decimal
 
 class CategorySerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
+    children = serializers.SerializerMethodField()
     
     class Meta:
         model = Category
-        fields = ('id', 'name', 'slug', 'description', 'image', 'image_url', 'created_at')
+        fields = ('id', 'name', 'slug', 'description', 'image', 'image_url', 'created_at', 
+                  'parent', 'children')
         read_only_fields = ('id', 'created_at')
     
     def get_image_url(self, obj):
         if obj.image:
             return obj.image.url
         return None
+    
+    def get_children(self, obj):
+        """Возвращает подкатегории для данной категории"""
+        children = obj.children.all().order_by('name')
+        return CategorySerializer(children, many=True, context=self.context).data
 
 
 class SizeSerializer(serializers.ModelSerializer):

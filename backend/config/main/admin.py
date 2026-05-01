@@ -21,8 +21,21 @@ class ProductAdmin(admin.ModelAdmin):
 
 
 class CategoryAdmin(admin.ModelAdmin):
-    list_display = ['name', 'slug']
+    list_display = ['name', 'parent', 'slug']
     prepopulated_fields = {'slug': ('name',)}
+
+    #list_filter = ('parent',)
+    #search_fields = ('name', 'slug')
+    #list_select_related = ('parent',)
+    
+    #fieldsets = (
+    #    ('Основная информация', {
+    #        'fields': ('name', 'slug', 'parent')
+    #    }),
+    #    ('Контент', {
+    #        'fields': ('description', 'image')
+    #    }),
+    #)
 
 
 class SizeAdmin(admin.ModelAdmin):

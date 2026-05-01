@@ -224,8 +224,12 @@ class CategoryListView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        categories = Category.objects.all()
-        serializer = CategorySerializer(categories, many=True)
+        #categories = Category.objects.all()
+        #serializer = CategorySerializer(categories, many=True)
+
+        # Получаем только корневые категории (без родителей)
+        root_categories = Category.objects.filter(parent__isnull=True).order_by('name')
+        serializer = CategorySerializer(root_categories, many=True)
         
         return Response({
             'categories': serializer.data
