@@ -34,35 +34,10 @@ class SizeSerializer(serializers.ModelSerializer):
 class ProductSizeSerializer(serializers.ModelSerializer):
     size_name = serializers.CharField(source='size.name', read_only=True)
     size_id = serializers.IntegerField(source='size.id', read_only=True)
-
-    price_display = serializers.SerializerMethodField()
-    sale_price_display = serializers.SerializerMethodField()
-    discount_badge = serializers.SerializerMethodField()
-
     
     class Meta:
         model = ProductSize
-        fields = ('id', 'name', 'slug', 'description', 'price', 'sale_price', 
-                  'discount_percent', 'is_on_sale', 'price_display', 'sale_price_display',
-                  'discount_badge', 'main_image', 'image_url', 'category', 
-                  'category_name', 'category_slug', 'sizes', 'images', 'color', 
-                  'stock', 'stock_available', 'is_active', 'is_featured', 
-                  'created_at', 'updated_at')
-    
-    def get_price_display(self, obj):
-        if obj.is_on_sale:
-            return f"{obj.price:.2f} BYN"
-        return f"{obj.price:.2f} BYN"
-    
-    def get_sale_price_display(self, obj):
-        if obj.is_on_sale:
-            return f"{obj.sale_price:.2f} BYN"
-        return None
-    
-    def get_discount_badge(self, obj):
-        if obj.discount_percent > 0:
-            return f"-{obj.discount_percent}%"
-        return None
+        fields = ('id', 'size', 'size_id', 'size_name', 'stock')
 
 
 class ProductImageSerializer(serializers.ModelSerializer):
@@ -78,18 +53,18 @@ class ProductSerializer(serializers.ModelSerializer):
     images = ProductImageSerializer(many=True, read_only=True)
     image_url = serializers.SerializerMethodField()
     price_display = serializers.SerializerMethodField()
+    sale_price_display = serializers.SerializerMethodField()
+    discount_badge = serializers.SerializerMethodField()
     stock_available = serializers.SerializerMethodField()
-    discount_percent = serializers.IntegerField(read_only=True)
-    is_on_sale = serializers.BooleanField(read_only=True)
-    sale_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     
     class Meta:
         model = Product
-        fields = ('id', 'name', 'slug', 'description', 'price',  'sale_price', 
-                  'discount_percent', 'is_on_sale', 'price_display',
-                  'main_image', 'image_url', 'category', 'category_name', 'category_slug',
-                  'sizes', 'images', 'color', 'stock', 'stock_available', 
-                  'is_active', 'is_featured', 'created_at', 'updated_at')
+        fields = ('id', 'name', 'slug', 'description', 'price', 'sale_price', 
+                  'discount_percent', 'is_on_sale', 'price_display', 'sale_price_display',
+                  'discount_badge', 'main_image', 'image_url', 'category', 
+                  'category_name', 'category_slug', 'sizes', 'images', 'color', 
+                  'stock', 'stock_available', 'is_active', 'is_featured', 
+                  'created_at', 'updated_at')
         read_only_fields = ('id', 'created_at', 'updated_at')
     
     def get_image_url(self, obj):
@@ -98,10 +73,21 @@ class ProductSerializer(serializers.ModelSerializer):
         return None
     
     def get_price_display(self, obj):
-        return f"BYN{obj.price:.2f}" if obj.price else "0.00BYN"
+        if obj.is_on_sale:
+            return f"{obj.sale_price:.2f} BYN"
+        return f"{obj.price:.2f} BYN"
+    
+    def get_sale_price_display(self, obj):
+        if obj.is_on_sale:
+            return f"{obj.sale_price:.2f} BYN"
+        return None
+    
+    def get_discount_badge(self, obj):
+        if obj.discount_percent > 0:
+            return f"-{obj.discount_percent}%"
+        return None
     
     def get_sizes(self, obj):
-        """Получить доступные размеры для товара"""
         product_sizes = obj.product_sizes.select_related('size').all()
         return [
             {
@@ -114,7 +100,6 @@ class ProductSerializer(serializers.ModelSerializer):
         ]
     
     def get_stock_available(self, obj):
-        """Получить общий доступный остаток"""
         return obj.stock
 
 

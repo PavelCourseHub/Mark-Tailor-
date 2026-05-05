@@ -22,6 +22,7 @@ class CategoryAdmin(admin.ModelAdmin):
     search_fields = ('name', 'slug')
     list_editable = ('order',)
     list_select_related = ('parent',)
+    prepopulated_fields = {'slug': ('name',)}  # 👈 ДОБАВЛЕНО
     
     fieldsets = (
         ('Основная информация', {
@@ -40,6 +41,7 @@ class ProductAdmin(admin.ModelAdmin):
     list_editable = ('discount_percent',)
     search_fields = ('name',)
     inlines = [ProductSizeInline, ProductImageInline]
+    prepopulated_fields = {'slug': ('name',)}  # 👈 ДОБАВЛЕНО
     
     fieldsets = (
         ('Основная информация', {

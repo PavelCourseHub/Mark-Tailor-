@@ -63,14 +63,18 @@ class CreateStripeCheckoutSessionView(APIView):
             product_name = f"{item.product.name}"
             if hasattr(item, 'product_size') and item.product_size:
                 product_name += f" - {item.product_size.size.name}"
+
+            # 👇 Конвертируем BYN в EUR (примерный курс)
+            # 1 EUR ≈ 3.5 BYN
+            price_in_eur = int(item.product.price * 100 / 3.5)
             
             line_items.append({
                 'price_data': {
-                    'currency': 'byn',
+                    'currency': 'eur',
                     'product_data': {
-                        'name': product_name,
+                        'name': f"{product_name} ({item.product.price:.2f} BYN)",
                     },
-                    'unit_amount': int(item.product.price * 100),
+                    'unit_amount': price_in_eur,
                 },
                 'quantity': item.quantity,
             })
@@ -146,7 +150,7 @@ class CreatePaymentIntentView(APIView):
         try:
             payment_intent = stripe.PaymentIntent.create(
                 amount=int(order.total_price * 100),
-                currency='eur',
+                currency='byn',
                 metadata={
                     'order_id': order.id,
                     'user_id': request.user.id
@@ -299,26 +303,43 @@ class StripeSuccessView(APIView):
 
     def get(self, request):
         session_id = request.query_params.get('session_id')
+        order_id = request.query_params.get('order_id')
         
         if not session_id:
-            #return Response({
-            #    'error': 'Session ID is required'
-            #}, status=status.HTTP_400_BAD_REQUEST)
-            return redirect('/cart')
+            return redirect('http://localhost:3000/cart') 
 
         try:
-            # Получаем сессию из Stripe
-            session = stripe.checkout.Session.retrieve(session_id)
-            order_id = session.metadata.get('order_id')
+            if not order_id:
+                session = stripe.checkout.Session.retrieve(session_id)
+                order_id = session.metadata.get('order_id')
             
-            #ДОБАВИЛИ ДЛЯ ТЕСТА
             if order_id:
                 order = Order.objects.get(id=order_id)
                 if order.status == 'pending':
                     order.status = 'processing'
                     order.save()
 
-            # Очищаем корзину пользователя (если есть request.user)
+                    # УМЕНЬШАЕМ КОЛИЧЕСТВО ТОВАРА НА СКЛАДЕ
+                    for item in order.items.select_related('product', 'size'):
+                        product = item.product
+                        product_size = item.size
+                        
+                        # Уменьшаем общий остаток товара
+                        if product.stock >= item.quantity:
+                            product.stock -= item.quantity
+                            product.save()
+                            logger.info(f"Товар '{product.name}': остаток уменьшен на {item.quantity}, новый остаток: {product.stock}")
+                        else:
+                            logger.warning(f"Недостаточно товара '{product.name}' на складе! Требуется: {item.quantity}, доступно: {product.stock}")
+                        
+                        # Уменьшаем остаток конкретного размера
+                        if product_size.stock >= item.quantity:
+                            product_size.stock -= item.quantity
+                            product_size.save()
+                            logger.info(f"Размер '{product_size.size.name}': остаток уменьшен на {item.quantity}, новый остаток: {product_size.stock}")
+                        else:
+                            logger.warning(f"Недостаточно размера '{product_size.size.name}'! Требуется: {item.quantity}, доступно: {product_size.stock}")
+                        
                 if request.user.is_authenticated:
                     from cart.views import CartMixin
                     cart_mixin = CartMixin()
@@ -326,109 +347,40 @@ class StripeSuccessView(APIView):
                     if cart and cart.total_items > 0:
                         cart.clear()
             
-            return redirect(f'http://localhost:3000/payment/success?order_id={order_id}')
+            return redirect('http://localhost:3000/orders')
             
         except Exception as e:
-            logger.error(f"Error on payment success: {str(e)}", exc_info=True)
-            return redirect('/cart')
-            
-            #if not order_id:
-            #    return Response({
-            #        'error': 'No order ID in session'
-            #    }, status=status.HTTP_400_BAD_REQUEST)
-            
-            #order = get_object_or_404(Order, id=order_id, user=request.user)
-
-            # Проверяем, что заказ действительно оплачен
-            #if order.status not in ['processing', 'completed']:
-            #    logger.warning(f"Order {order_id} status is {order.status} on success callback")
-            
-            # Очищаем корзину пользователя
-            #cart_mixin = CartMixin()
-            #cart = cart_mixin.get_cart(request)
-            #if cart and cart.total_items > 0:
-            #    cart.clear()
-            #    logger.info(f"Cart cleared for user {request.user.id} after successful payment")
-
-            #from orders.serializers import OrderSerializer
-            #order_serializer = OrderSerializer(order)
-            
-            #response_data = {
-            #    'message': 'Payment successful',
-            #    'order': order_serializer.data,
-            #    'session_id': session_id
-            #}
-            
-            #return Response(response_data, status=status.HTTP_200_OK)
-
-        #except stripe.error.StripeError as e:
-        #    logger.error(f"Stripe error on success: {str(e)}")
-        #    return Response({
-        #        'error': 'Failed to verify payment',
-        #        'message': str(e)
-        #    }, status=status.HTTP_400_BAD_REQUEST)
-        #except Exception as e:
-        #    logger.error(f"Error on payment success: {str(e)}", exc_info=True)
-        #    return Response({
-        #        'error': 'Payment verification error',
-        #        'message': 'Unable to verify payment status'
-        #    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            logger.error(f"Ошибка при оплате: {str(e)}", exc_info=True)
+            return redirect('http://localhost:3000/cart')
 
 
 class StripeCancelView(APIView):
     """
     Обработка отмены оплаты (редирект со Stripe)
     """
-    #permission_classes = [IsAuthenticated]
     permission_classes = [AllowAny] 
 
     def get(self, request):
         order_id = request.query_params.get('order_id')
         
         if not order_id:
-            #return Response({
-            #    'error': 'Order ID is required',
-            #    'redirect_url': '/cart'
-            #}, status=status.HTTP_400_BAD_REQUEST)
-            return redirect('/cart')
+            return redirect('http://localhost:3000/cart')  
 
         try:
-            #order = get_object_or_404(Order, id=order_id, user=request.user)
             order = Order.objects.get(id=order_id)
-
-            # Отменяем заказ только если он еще не обработан
             if order.status == 'pending':
                 order.status = 'cancelled'
                 order.save()
                 logger.info(f"Заказ {order_id} отменен пользователем во время оплаты")
             
-            # Перенаправляем на страницу с сообщением об отмене
-            return redirect(f'http://localhost:3000/payment/cancel?order_id={order_id}')
+            return redirect('http://localhost:3000/cart?payment=cancelled')
             
         except Order.DoesNotExist:
-            logger.error(f"Order {order_id} not found")
-            return redirect('/cart')
+            logger.error(f"Заказ {order_id} не найден")
+            return redirect('http://localhost:3000/cart')  
         except Exception as e:
             logger.error(f"Ошибка при отмене платежа: {str(e)}", exc_info=True)
-            return redirect('/cart')
-
-            from orders.serializers import OrderSerializer
-            order_serializer = OrderSerializer(order)
-            
-            return Response({
-                'message': 'Payment cancelled',
-                'order': order_serializer.data,
-                'redirect_url': '/cart'
-            }, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            logger.error(f"Error on payment cancel: {str(e)}", exc_info=True)
-            return Response({
-                'error': 'Failed to cancel order',
-                'message': str(e),
-                'redirect_url': '/cart'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+            return redirect('http://localhost:3000/cart')
 
 class PaymentStatusView(APIView):
     """

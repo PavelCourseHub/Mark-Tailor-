@@ -150,7 +150,7 @@ class CheckoutView(APIView):
                     product=item.product,
                     size=item.product_size,
                     quantity=item.quantity,
-                    price=item.product.price or Decimal('0.00')
+                    price=item.product.sale_price if item.product.is_on_sale else item.product.price
                 )
             
             payment_provider = validated_data['payment_provider']
@@ -158,7 +158,7 @@ class CheckoutView(APIView):
             
             if payment_provider == 'stripe':
                 try:
-                    logger.info("Creating Stripe checkout session")
+                    logger.info("Создание сессии оформления заказа Stripe")
                     
                     line_items = []
                     for item in cart.items.select_related('product', 'product_size'):
@@ -166,17 +166,37 @@ class CheckoutView(APIView):
                         if item.product_size and item.product_size.size:
                             product_name += f" - {item.product_size.size.name}"
                         
+                        # Получаем цену со скидкой
+                        price = item.product.sale_price if item.product.is_on_sale else item.product.price
+                        price_in_eur = int(price * Decimal(100) / Decimal(3.5))  # Конвертация BYN → EUR
+
                         line_items.append({
                             'price_data': {
                                 'currency': 'eur',
                                 'product_data': {
-                                    'name': product_name,
+                                    'name': f"{product_name} ({price:.2f} BYN)",
                                 },
-                                'unit_amount': int(item.product.price * 100),
+                                'unit_amount': price_in_eur,
                             },
                             'quantity': item.quantity,
                         })
-                    
+
+                    #  ДОБАВЛЯЕМ СТОИМОСТЬ ДОСТАВКИ
+                    if delivery_method == 'courier':
+                        shipping_cost_byn = 10  # Стоимость доставки в BYN
+                        shipping_cost_cents = int(shipping_cost_byn * 100 / 3.5)
+                        
+                        line_items.append({
+                            'price_data': {
+                                'currency': 'eur',
+                                'product_data': {
+                                    'name': f"Доставка курьером ({shipping_cost_byn:.2f} BYN)",
+                                },
+                                'unit_amount': shipping_cost_cents,
+                            },
+                            'quantity': 1,
+                        })
+                                
                     success_url = request.build_absolute_uri('/payment/stripe/success/')
                     cancel_url = request.build_absolute_uri('/payment/stripe/cancel/')
                     
@@ -184,7 +204,7 @@ class CheckoutView(APIView):
                         payment_method_types=['card'],
                         line_items=line_items,
                         mode='payment',
-                        success_url=success_url + '?session_id={CHECKOUT_SESSION_ID}',
+                        success_url = success_url + '?session_id={CHECKOUT_SESSION_ID}&order_id=' + str(order.id),
                         cancel_url=cancel_url + f'?order_id={order.id}',
                         metadata={'order_id': order.id}
                     )
@@ -196,13 +216,13 @@ class CheckoutView(APIView):
                     checkout_url = checkout_session.url
                     
                 except Exception as e:
-                    logger.error(f"Error creating Stripe session: {str(e)}", exc_info=True)
-                    raise Exception(f"Payment processing error: {str(e)}")
+                    logger.error(f"Ошибка при создании сессии Stripe: {str(e)}", exc_info=True)
+                    raise Exception(f"Ошибка обработки платежа: {str(e)}")
             
             elif payment_provider == 'heleket':
                 # Для Heleket просто очищаем корзину
                 cart.clear()
-                logger.info("Heleket payment selected (not implemented yet)")
+                logger.info("Выбран способ оплаты Heleket (пока не реализован).")
                 checkout_url = None
             
             order_serializer = OrderSerializer(order)

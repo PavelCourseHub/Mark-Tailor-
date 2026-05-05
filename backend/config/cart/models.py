@@ -68,7 +68,7 @@ class Cart(models.Model):
 
     @property
     def subtotal(self):
-        """Сумма всех товаров в корзине (без учета доставки и налогов)"""
+        """Сумма всех товаров в корзине с учётом скидок"""
         return sum(item.total_price for item in self.items.all())
 
     def add_product(self, product, product_size, quantity=1):
@@ -252,12 +252,13 @@ class CartItem(models.Model):
     @property
     def total_price(self):
         """
-        Общая стоимость товара с учетом количества
-        
-        Returns:
-            Decimal: цена * количество
+        Общая стоимость товара с учетом количества и скидки
         """
-        return Decimal(str(self.product.price)) * self.quantity
+        if self.product.is_on_sale:
+            price = self.product.sale_price
+        else:
+            price = self.product.price
+        return price * self.quantity
 
     def save(self, *args, **kwargs):
         """

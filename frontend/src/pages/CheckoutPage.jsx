@@ -43,7 +43,7 @@ const CheckoutPage = () => {
   // Получение общей суммы с доставкой
   const getTotalPrice = () => {
     const subtotal = getSubtotal();
-    const shipping = deliveryMethod === "courier" ? 5 : 0;
+    const shipping = deliveryMethod === "courier" ? 10 : 0;
     return subtotal + shipping;
   };
 
@@ -94,7 +94,7 @@ const CheckoutPage = () => {
     // Валидация для доставки курьером
     if (deliveryMethod === "courier") {
       if (!deliveryAddress.address1 || !deliveryAddress.city || !deliveryAddress.country) {
-        setError("Please fill in all required address fields (Address, City, Country)");
+        setError("Пожалуйста, заполните все обязательные поля адреса (Адрес, Город, Страна).");
         return;
       }
     }
@@ -406,7 +406,7 @@ const CheckoutPage = () => {
                       <p className="font-medium text-gray-900">{item.product_name}</p>
                       <p className="text-sm text-gray-500">Размер: {item.size_name}</p>
                       <p className="text-sm text-gray-500">Количество: {item.quantity}</p>
-                      <p className="font-semibold text-gray-900">{formatPrice(item.subtotal)} BYN</p>
+                      <p className="font-semibold text-gray-900">{formatPrice(item.subtotal)}</p>
                     </div>
                   </div>
                 ))}
@@ -415,7 +415,7 @@ const CheckoutPage = () => {
               <div className="border-t pt-4 space-y-2">
                 <div className="flex justify-between text-gray-600">
                   <span>Subtotal</span>
-                  <span>{formatPrice(getSubtotal())} BYN</span>
+                  <span>{formatPrice(getSubtotal())}</span>
                 </div>
                 <div className="flex justify-between text-gray-600">
                   <span>Доставка</span>
@@ -423,7 +423,7 @@ const CheckoutPage = () => {
                 </div>
                 <div className="flex justify-between text-lg font-bold text-gray-900 pt-2 border-t">
                   <span>Сумма</span>
-                  <span>{formatPrice(getTotalPrice())} BYN</span>
+                  <span>{formatPrice(getTotalPrice())}</span>
                 </div>
               </div>
 
@@ -438,7 +438,7 @@ const CheckoutPage = () => {
                 disabled={submitting}
                 className="w-full mt-6 bg-black text-white py-3 rounded font-semibold hover:bg-gray-800 transition disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
-                {submitting ? "Обработка..." : `Оформить заказ • ${formatPrice(getTotalPrice())} BYN`}
+                {submitting ? "Обработка..." : `Оформить заказ • ${formatPrice(getTotalPrice())}`}
               </button>
             </div>
           </div>

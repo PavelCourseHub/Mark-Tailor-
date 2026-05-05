@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils.text import slugify
+import uuid
 from django.core.validators import MinValueValidator, MaxValueValidator
 from decimal import Decimal
 from django.core.validators import FileExtensionValidator
@@ -10,7 +11,7 @@ class Category(models.Model):
     Модель категории товаров
     """
     name = models.CharField(max_length=100, verbose_name='Название')
-    slug = models.SlugField(max_length=100, unique=True, verbose_name='URL')
+    slug = models.SlugField(max_length=100, unique=True, verbose_name='URL', blank=True)
     description = models.TextField(blank=True, verbose_name='Описание')
     image = models.ImageField(
         upload_to='categories/', 
@@ -38,7 +39,13 @@ class Category(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.slug:
-            self.slug = slugify(self.name)
+            base_slug = slugify(self.name)
+            slug = base_slug
+            counter = 1
+            while Category.objects.filter(slug=slug).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            self.slug = slug
 
         if self.order == 0:
             max_order = Category.objects.aggregate(max_order=models.Max('order'))['max_order']
@@ -73,7 +80,7 @@ class Product(models.Model):
     Модель товара
     """
     name = models.CharField(max_length=200, verbose_name='Название')
-    slug = models.SlugField(max_length=200, unique=True, verbose_name='URL')
+    slug = models.SlugField(max_length=200, unique=True, verbose_name='URL', blank=True)
     category = models.ForeignKey(
         Category, 
         on_delete=models.CASCADE,
@@ -136,7 +143,13 @@ class Product(models.Model):
     def save(self, *args, **kwargs):
         # Генерация slug
         if not self.slug:
-            self.slug = slugify(self.name)
+            base_slug = slugify(self.name)
+            slug = base_slug
+            counter = 1
+            while Product.objects.filter(slug=slug).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            self.slug = slug
         
         # Автоматически рассчитываем цену со скидкой
         self.sale_price = self.calculate_sale_price()

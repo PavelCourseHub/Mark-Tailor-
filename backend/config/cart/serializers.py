@@ -1,14 +1,13 @@
 from rest_framework import serializers
 from .models import Cart, CartItem
 from main.models import Product, ProductSize
-from main.serializers import ProductSerializer
 from decimal import Decimal
 
 
 class CartItemSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_slug = serializers.CharField(source='product.slug', read_only=True)
-    product_price = serializers.DecimalField(source='product.price', max_digits=10, decimal_places=2, read_only=True)
+    product_price = serializers.SerializerMethodField()
     product_image = serializers.SerializerMethodField()
     size_name = serializers.CharField(source='product_size.size.name', read_only=True)
     size_id = serializers.IntegerField(source='product_size.id', read_only=True)
@@ -27,9 +26,19 @@ class CartItemSerializer(serializers.ModelSerializer):
             return obj.product.main_image.url
         return None
     
+    def get_product_price(self, obj):
+        """Возвращает цену со скидкой, если она есть"""
+        if obj.product.is_on_sale:
+            return float(obj.product.sale_price)
+        return float(obj.product.price)
+    
     def get_subtotal(self, obj):
-        return obj.product.price * obj.quantity if obj.product.price else Decimal('0.00')
-
+        """Считает сумму с учётом скидки"""
+        if obj.product.is_on_sale:
+            price = obj.product.sale_price
+        else:
+            price = obj.product.price
+        return price * obj.quantity
 
 class CartSerializer(serializers.ModelSerializer):
     items = CartItemSerializer(many=True, read_only=True)

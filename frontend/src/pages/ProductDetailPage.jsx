@@ -214,15 +214,17 @@ const ProductDetailPage = () => {
               {/* Цены со скидкой */}
               <div className="mb-4">
                 {product.is_on_sale ? (
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <span className="text-3xl font-bold text-red-600">
-                      {Number(product.sale_price).toFixed(2)} BYN
-                    </span>
+                  <div className="flex items-center gap-4 flex-wrap">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-red-600 text-white text-sm font-bold w-8 h-8 rounded-full flex items-center justify-center shadow-md">
+                        %
+                      </div>
+                      <span className="text-3xl font-bold text-red-600">
+                        {Number(product.sale_price).toFixed(2)} BYN
+                      </span>
+                    </div>
                     <span className="text-xl text-gray-400 line-through">
                       {Number(product.price).toFixed(2)} BYN
-                    </span>
-                    <span className="bg-red-600 text-white text-sm font-bold px-3 py-1 rounded-full">
-                      -{product.discount_percent}%
                     </span>
                   </div>
                 ) : (

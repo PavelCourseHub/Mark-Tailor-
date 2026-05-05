@@ -252,11 +252,16 @@ const ProductCard = ({ product, onAddToCart }) => {
         {/* Цены со скидкой */}
         <div className="mt-2">
           {product.is_on_sale ? (
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-lg font-bold text-red-600">
-                {Number(product.sale_price).toFixed(2)} BYN
-              </span>
-              <span className="text-sm text-gray-400 line-through">
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <div className="bg-red-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shadow-sm">
+                  %
+                </div>
+                <span className="text-lg font-bold text-red-600">
+                  {Number(product.sale_price).toFixed(2)} BYN
+                </span>
+              </div>
+              <span className="text-sm text-gray-400 line-through ml-1">
                 {Number(product.price).toFixed(2)} BYN
               </span>
             </div>
@@ -266,7 +271,7 @@ const ProductCard = ({ product, onAddToCart }) => {
             </span>
           )}
         </div>
-        
+                
         <button
           onClick={() => onAddToCart(product)}
           disabled={product.stock === 0}
