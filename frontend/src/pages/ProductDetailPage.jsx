@@ -75,11 +75,9 @@ const ProductDetailPage = () => {
   };
 
   const formatPrice = (price) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "BYN",
-    }).format(price);
-  };
+  const num = typeof price === 'number' ? price : parseFloat(price || 0);
+  return `${num.toFixed(2)} BYN`;
+};
 
   const handleQuantityChange = (e) => {
     const value = parseInt(e.target.value);

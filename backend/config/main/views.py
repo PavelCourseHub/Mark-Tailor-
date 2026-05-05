@@ -17,6 +17,15 @@ from .serializers import (
     SizeSerializer
 )
 
+def get_all_subcategory_ids(category):
+    """
+    Рекурсивно собирает ID категории и всех её подкатегорий
+    """
+    ids = [category.id]
+    for child in category.children.all():
+        ids.extend(get_all_subcategory_ids(child))
+    return ids
+
 logger = logging.getLogger(__name__)
 
 
@@ -67,7 +76,8 @@ class CatalogView(APIView):
                 products = products.filter(is_on_sale=True)
             else:
                 current_category = get_object_or_404(Category, slug=category_slug)
-                products = products.filter(category=current_category)
+                category_ids = get_all_subcategory_ids(current_category)
+                products = products.filter(category_id__in=category_ids)
         
         # Поиск по названию и описанию
         query = filters.get('q', '')
