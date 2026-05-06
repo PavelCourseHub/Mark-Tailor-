@@ -10,17 +10,23 @@ class Order(models.Model):
     Модель заказа
     """
     STATUS_CHOICES = (
-        ('pending', 'Pending'),
-        ('processing', 'Processing'),
-        ('shipped', 'Shipped'),
-        ('delivered', 'Delivered'),
-        ('cancelled', 'Cancelled'),
-        ('failed', 'Failed'),
+        ('pending', 'Ожидает оплаты'),
+        ('processing', 'В обработке'),
+        ('shipped', 'Отправлен'),
+        ('delivered', 'Доставлен'),
+        ('completed', 'Завершён'),
+        ('cancelled', 'Отменён'),
+        ('failed', 'Ошибка оплаты'),
+        ('refunded', 'Возврат'),
+        ('waiting_pickup', 'Ожидает выдачи'),
+        ('received_paid', 'Получен и оплачен'),
     )
     
     PAYMENT_PROVIDER_CHOICES = (
         ('stripe', 'Stripe'),
         ('heleket', 'Heleket'),
+        ('cash', 'Наличные'),
+        ('card', 'Картой'),
     )
 
     # Основная информация

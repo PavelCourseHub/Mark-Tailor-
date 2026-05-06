@@ -23,16 +23,20 @@ class OrderItemSerializer(serializers.ModelSerializer):
 class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
     total_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
-    
+    status_display = serializers.SerializerMethodField()
+
     class Meta:
         model = Order
         fields = ('id', 'user', 'first_name', 'last_name', 'email', 'company',
                   'address1', 'address2', 'city', 'country', 'province', 
                   'postal_code', 'phone', 'special_instructions', 'status',
-                  'total_price', 'created_at', 'updated_at', 'payment_provider', 
+                  'status_display', 'total_price', 'created_at', 'updated_at', 'payment_provider', 
                   'stripe_payment_intent_id', 'items')
-        read_only_fields = ('id', 'user', 'status', 'created_at', 'updated_at', 'total_price')
+        read_only_fields = ('id', 'user', 'status', 'status_display', 'created_at', 'updated_at', 'total_price')
 
+    def get_status_display(self, obj):
+        status_map = dict(Order.STATUS_CHOICES)
+        return status_map.get(obj.status, obj.status)
 
 class CheckoutRequestSerializer(serializers.Serializer):
     # Обязательные поля

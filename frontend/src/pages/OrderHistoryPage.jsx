@@ -3,12 +3,16 @@ import { Link } from "react-router-dom";
 import { ordersAPI } from "../api/orders";
 
 const STATUS_MAP = {
-  pending: { label: "В ожидании", icon: "⏳", color: "bg-yellow-100 text-yellow-800" },
-  processing: { label: "Обработка", icon: "🔄", color: "bg-blue-100 text-blue-800" },
+  pending: { label: "Ожидает оплаты", icon: "⏳", color: "bg-yellow-100 text-yellow-800" },
+  processing: { label: "В обработке", icon: "🔄", color: "bg-blue-100 text-blue-800" },
   shipped: { label: "Отправлен", icon: "📦", color: "bg-purple-100 text-purple-800" },
   delivered: { label: "Доставлен", icon: "✅", color: "bg-green-100 text-green-800" },
+  completed: { label: "Завершён", icon: "🏁", color: "bg-green-100 text-green-800" },
   cancelled: { label: "Отменён", icon: "❌", color: "bg-red-100 text-red-800" },
-  failed: { label: "Неудавшийся", icon: "⚠️", color: "bg-orange-100 text-orange-800" },
+  failed: { label: "Ошибка оплаты", icon: "⚠️", color: "bg-orange-100 text-orange-800" },
+  refunded: { label: "Возврат", icon: "↩️", color: "bg-pink-100 text-pink-800" },
+  waiting_pickup: { label: "Ожидает выдачи", icon: "📍", color: "bg-indigo-100 text-indigo-800" },
+  received_paid: { label: "Получен и оплачен", icon: "💰", color: "bg-emerald-100 text-emerald-800" },
 };
 
 const OrderHistoryPage = () => {

@@ -3,19 +3,24 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { ordersAPI } from "../api/orders";
 
 const STATUS_MAP = {
-  pending: { label: "В ожидании", icon: "⏳", color: "bg-yellow-100 text-yellow-800", step: 1 },
-  processing: { label: "Обработка", icon: "🔄", color: "bg-blue-100 text-blue-800", step: 2 },
+  pending: { label: "Ожидает оплаты", icon: "⏳", color: "bg-yellow-100 text-yellow-800", step: 1 },
+  processing: { label: "В обработке", icon: "🔄", color: "bg-blue-100 text-blue-800", step: 2 },
   shipped: { label: "Отправлен", icon: "📦", color: "bg-purple-100 text-purple-800", step: 3 },
   delivered: { label: "Доставлен", icon: "✅", color: "bg-green-100 text-green-800", step: 4 },
+  completed: { label: "Завершён", icon: "🏁", color: "bg-green-100 text-green-800", step: 5 },
   cancelled: { label: "Отменён", icon: "❌", color: "bg-red-100 text-red-800", step: 0 },
-  failed: { label: "Неудавшийся", icon: "⚠️", color: "bg-orange-100 text-orange-800", step: 0 },
+  failed: { label: "Ошибка оплаты", icon: "⚠️", color: "bg-orange-100 text-orange-800", step: 0 },
+  refunded: { label: "Возврат", icon: "↩️", color: "bg-pink-100 text-pink-800", step: 0 },
+  waiting_pickup: { label: "Ожидает выдачи", icon: "📍", color: "bg-indigo-100 text-indigo-800", step: 3 },
+  received_paid: { label: "Получен и оплачен", icon: "💰", color: "bg-emerald-100 text-emerald-800", step: 5 },
 };
 
 const ORDER_STEPS = [
   { key: "pending", label: "Заказ оформлен", icon: "📝" },
-  { key: "processing", label: "Обработка", icon: "🔄" },
+  { key: "processing", label: "В обработке", icon: "🔄" },
   { key: "shipped", label: "Отправлен", icon: "📦" },
   { key: "delivered", label: "Доставлен", icon: "✅" },
+  { key: "completed", label: "Завершён", icon: "🏁" },
 ];
 
 const OrderDetailPage = () => {

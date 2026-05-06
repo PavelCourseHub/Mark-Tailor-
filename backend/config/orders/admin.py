@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.utils.safestring import mark_safe
 from .models import Order, OrderItem
 
 
@@ -51,26 +52,22 @@ class OrderAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
-    
+
     def user_info(self, obj):
-        """Отображает информацию о пользователе"""
         if obj.user:
             return f"{obj.user.get_full_name() or obj.user.username}\n({obj.user.id})"
         return "Гость"
     user_info.short_description = 'Пользователь'
     
     def total_price_display(self, obj):
-        """Отображает сумму заказа"""
         return f"€{obj.total_price:.2f}"
     total_price_display.short_description = 'Сумма заказа'
     
     def items_count(self, obj):
-        """Количество товаров в заказе"""
         return obj.items.count()
     items_count.short_description = 'Товаров'
     
     def items_summary(self, obj):
-        """Краткая сводка по товарам (для админки)"""
         items = obj.items.select_related('product', 'size__size')
         if not items:
             return "Нет товаров"
@@ -83,8 +80,7 @@ class OrderAdmin(admin.ModelAdmin):
     items_summary.short_description = 'Состав заказа'
     
     def get_readonly_fields(self, request, obj=None):
-        """Делаем поля только для чтения при редактировании существующего заказа"""
-        if obj:  # Существующий заказ
+        if obj:
             return self.readonly_fields + ('user', 'first_name', 'last_name', 'email', 
                                            'company', 'address1', 'address2', 'city',
                                            'country', 'province', 'postal_code', 'phone',
@@ -92,28 +88,63 @@ class OrderAdmin(admin.ModelAdmin):
         return self.readonly_fields
     
     def get_queryset(self, request):
-        """Оптимизируем запросы с select_related и prefetch_related"""
         return super().get_queryset(request).select_related('user').prefetch_related('items')
     
-    actions = ['mark_as_processing', 'mark_as_completed', 'mark_as_cancelled']
+    # 👇 ДОБАВЬТЕ НОВЫЕ ДЕЙСТВИЯ ДЛЯ ВСЕХ СТАТУСОВ
+    actions = ['mark_as_pending', 'mark_as_processing', 'mark_as_shipped', 
+               'mark_as_delivered', 'mark_as_completed', 'mark_as_cancelled', 
+               'mark_as_failed', 'mark_as_refunded', 'mark_as_waiting_pickup', 
+               'mark_as_received_paid']
+    
+    def mark_as_pending(self, request, queryset):
+        updated = queryset.update(status='pending')
+        self.message_user(request, f'{updated} заказ(ов) отмечен(ы) как "Ожидает оплаты"')
+    mark_as_pending.short_description = 'Отметить как "Ожидает оплаты"'
     
     def mark_as_processing(self, request, queryset):
-        """Действие: отметить заказы как 'В обработке'"""
         updated = queryset.update(status='processing')
         self.message_user(request, f'{updated} заказ(ов) отмечен(ы) как "В обработке"')
     mark_as_processing.short_description = 'Отметить как "В обработке"'
     
+    def mark_as_shipped(self, request, queryset):
+        updated = queryset.update(status='shipped')
+        self.message_user(request, f'{updated} заказ(ов) отмечен(ы) как "Отправлен"')
+    mark_as_shipped.short_description = 'Отметить как "Отправлен"'
+    
+    def mark_as_delivered(self, request, queryset):
+        updated = queryset.update(status='delivered')
+        self.message_user(request, f'{updated} заказ(ов) отмечен(ы) как "Доставлен"')
+    mark_as_delivered.short_description = 'Отметить как "Доставлен"'
+    
     def mark_as_completed(self, request, queryset):
-        """Действие: отметить заказы как 'Завершен'"""
         updated = queryset.update(status='completed')
-        self.message_user(request, f'{updated} заказ(ов) отмечен(ы) как "Завершен"')
-    mark_as_completed.short_description = 'Отметить как "Завершен"'
+        self.message_user(request, f'{updated} заказ(ов) отмечен(ы) как "Завершён"')
+    mark_as_completed.short_description = 'Отметить как "Завершён"'
     
     def mark_as_cancelled(self, request, queryset):
-        """Действие: отметить заказы как 'Отменен'"""
         updated = queryset.update(status='cancelled')
-        self.message_user(request, f'{updated} заказ(ов) отмечен(ы) как "Отменен"')
-    mark_as_cancelled.short_description = 'Отметить как "Отменен"'
+        self.message_user(request, f'{updated} заказ(ов) отмечен(ы) как "Отменён"')
+    mark_as_cancelled.short_description = 'Отметить как "Отменён"'
+    
+    def mark_as_failed(self, request, queryset):
+        updated = queryset.update(status='failed')
+        self.message_user(request, f'{updated} заказ(ов) отмечен(ы) как "Ошибка оплаты"')
+    mark_as_failed.short_description = 'Отметить как "Ошибка оплаты"'
+    
+    def mark_as_refunded(self, request, queryset):
+        updated = queryset.update(status='refunded')
+        self.message_user(request, f'{updated} заказ(ов) отмечен(ы) как "Возврат"')
+    mark_as_refunded.short_description = 'Отметить как "Возврат"'
+    
+    def mark_as_waiting_pickup(self, request, queryset):
+        updated = queryset.update(status='waiting_pickup')
+        self.message_user(request, f'{updated} заказ(ов) отмечен(ы) как "Ожидает выдачи"')
+    mark_as_waiting_pickup.short_description = 'Отметить как "Ожидает выдачи"'
+    
+    def mark_as_received_paid(self, request, queryset):
+        updated = queryset.update(status='received_paid')
+        self.message_user(request, f'{updated} заказ(ов) отмечен(ы) как "Получен и оплачен"')
+    mark_as_received_paid.short_description = 'Отметить как "Получен и оплачен"'
 
 
 @admin.register(OrderItem)
