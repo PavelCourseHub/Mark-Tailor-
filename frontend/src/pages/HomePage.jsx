@@ -249,16 +249,16 @@ const ProductCard = ({ product, onAddToCart }) => {
                   %
                 </div>
                 <span className="text-lg font-bold text-red-600">
-                  {Number(product.sale_price).toFixed(2)} BYN
+                  {Math.round(product.sale_price)} BYN
                 </span>
               </div>
-              <span className="text-sm text-gray-400 line-through ml-1">
-                {Number(product.price).toFixed(2)} BYN
+              <span className="text-sm text-gray-400 line-through">
+                {Math.round(product.price)} BYN
               </span>
             </div>
           ) : (
             <span className="text-lg font-bold text-gray-900">
-              {Number(product.price).toFixed(2)} BYN
+              {Math.round(product.price)} BYN
             </span>
           )}
         </div>

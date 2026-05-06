@@ -75,8 +75,8 @@ const ProductDetailPage = () => {
   };
 
   const formatPrice = (price) => {
-  const num = typeof price === 'number' ? price : parseFloat(price || 0);
-  return `${num.toFixed(2)} BYN`;
+    const num = typeof price === 'number' ? price : parseFloat(price || 0);
+    return `${Math.round(num)} BYN`;
 };
 
   const handleQuantityChange = (e) => {
@@ -218,16 +218,16 @@ const ProductDetailPage = () => {
                         %
                       </div>
                       <span className="text-3xl font-bold text-red-600">
-                        {Number(product.sale_price).toFixed(2)} BYN
+                        {Math.round(product.sale_price)} BYN
                       </span>
                     </div>
                     <span className="text-xl text-gray-400 line-through">
-                      {Number(product.price).toFixed(2)} BYN
+                      {Math.round(product.price)} BYN
                     </span>
                   </div>
                 ) : (
                   <span className="text-3xl font-bold text-gray-900">
-                    {Number(product.price).toFixed(2)} BYN
+                    {Math.round(product.price)} BYN
                   </span>
                 )}
               </div>

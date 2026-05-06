@@ -32,8 +32,8 @@ const CheckoutPage = () => {
   // Функция для форматирования цены
   const formatPrice = (price) => {
     const num = typeof price === 'number' ? price : parseFloat(price || 0);
-    return num.toFixed(2) + ' BYN';
-  };
+    return `${Math.round(num)} BYN`;
+};
 
   // Получение суммы корзины
   const getSubtotal = () => {

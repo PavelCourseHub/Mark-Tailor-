@@ -10,11 +10,8 @@ const CartPage = () => {
   const [updating, setUpdating] = useState(false);
 
   const formatPrice = (price) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "BYN",
-    }).format(price);
-  };
+    return `${Math.round(price)} BYN`;
+};
 
   const handleQuantityChange = async (itemId, newQuantity) => {
     if (newQuantity < 1) return;

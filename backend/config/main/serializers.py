@@ -90,12 +90,12 @@ class ProductSerializer(serializers.ModelSerializer):
     
     def get_price_display(self, obj):
         if obj.is_on_sale:
-            return f"{obj.sale_price:.2f} BYN"
-        return f"{obj.price:.2f} BYN"
+            return f"{int(round(obj.sale_price))} BYN"
+        return f"{int(round(obj.price))} BYN"
     
     def get_sale_price_display(self, obj):
         if obj.is_on_sale:
-            return f"{obj.sale_price:.2f} BYN"
+            return f"{int(round(obj.sale_price))} BYN"
         return None
     
     def get_discount_badge(self, obj):
@@ -136,8 +136,8 @@ class FilterParamsSerializer(serializers.Serializer):
     q = serializers.CharField(required=False, allow_blank=True)
     category = serializers.CharField(required=False, allow_blank=True)
     color = serializers.CharField(required=False, allow_blank=True)
-    min_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, min_value=0)
-    max_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, min_value=0)
+    min_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, min_value=0, coerce_to_string=False)
+    max_price = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, min_value=0, coerce_to_string=False)
     size = serializers.CharField(required=False, allow_blank=True)
     sort = serializers.ChoiceField(
         choices=['price_asc', 'price_desc', 'newest', 'name_asc'], 

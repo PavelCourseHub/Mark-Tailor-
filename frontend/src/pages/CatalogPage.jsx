@@ -20,7 +20,7 @@ const CatalogPage = () => {
     max_price: searchParams.get("max_price") || "",
     size: searchParams.get("size") || "",
     color: searchParams.get("color") || "",
-    sort: searchParams.get("sort") || "-created_at",
+    sort: searchParams.get("sort") || "newest",
   });
 
   useEffect(() => {
@@ -31,11 +31,19 @@ const CatalogPage = () => {
   const fetchCatalog = async () => {
     setLoading(true);
     try {
-      const params = Object.fromEntries(searchParams);
+      const rawParams = Object.fromEntries(searchParams);
+      const params = {};
+        for (const [key, value] of Object.entries(rawParams)) {
+            if (key === 'min_price' || key === 'max_price') {
+                params[key] = parseFloat(value);
+            } else {
+                params[key] = value;
+            }
+        }
       const response = await productsAPI.getCatalog(params);
       setProducts(response.data.products);
     } catch (error) {
-      console.error("Error fetching catalog:", error);
+      console.error("Ошибка при получении каталога:", error);
     } finally {
       setLoading(false);
     }
@@ -59,9 +67,15 @@ const CatalogPage = () => {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, value]) => {
       if (value && value !== "") {
-        params.set(key, value);
+          // Для price преобразуем в число
+        if (key === 'min_price' || key === 'max_price') {
+          params.set(key, parseFloat(value));
+        } else {
+          params.set(key, value);
+        }
       }
     });
+    
     setSearchParams(params);
     setFilterOpen(false);
   };
@@ -74,17 +88,14 @@ const CatalogPage = () => {
       max_price: "",
       size: "",
       color: "",
-      sort: "-created_at",
+      sort: "newest",
     });
     setSearchParams({});
   };
 
   const formatPrice = (price) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "BYN",
-    }).format(price);
-  };
+    return `${Math.round(price)} BYN`;
+};
 
   const handleAddToCart = async (product, sizeId = null) => {
     const result = await addToCart(product.slug, sizeId, 1);
@@ -220,12 +231,11 @@ const CatalogPage = () => {
                   name="sort"
                   value={filters.sort}
                   onChange={handleFilterChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-black"
                 >
-                  <option value="-created_at">Новинки</option>
-                  <option value="price">Цена: по возрастанию</option>
-                  <option value="-price">Цена: по убыванию</option>
-                  <option value="name">Название: А-Я</option>
+                  <option value="newest">Новинки</option>
+                  <option value="price_asc">Цена: по возрастанию</option>
+                  <option value="price_desc">Цена: по убыванию</option>
+                  <option value="name_asc">Название: А-Я</option>
                 </select>
               </div>
             </div>
@@ -306,16 +316,16 @@ const CatalogPage = () => {
                             %
                           </div>
                           <span className="text-lg font-bold text-red-600">
-                            {Number(product.sale_price).toFixed(2)} BYN
+                            {Math.round(product.sale_price)} BYN
                           </span>
                         </div>
                         <span className="text-sm text-gray-400 line-through ml-1">
-                          {Number(product.price).toFixed(2)} BYN
+                          {Math.round(product.price)} BYN
                         </span>
                       </div>
                     ) : (
                       <span className="text-lg font-bold text-gray-900">
-                        {Number(product.price).toFixed(2)} BYN
+                        {Math.round(product.price)} BYN
                       </span>
                     )}
                   </div>

@@ -2,7 +2,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
-from django.db.models import Q
+from django.db.models import Q, Case, When, F, DecimalField
 from django.shortcuts import get_object_or_404
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 import logging
@@ -57,9 +57,16 @@ class CatalogView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
+
+        print("=" * 50)
+        print("RAW QUERY PARAMS:", request.query_params)
+        print("RAW QUERY PARAMS dict:", dict(request.query_params))
+        print("=" * 50)
+
         # Валидируем параметры фильтрации
         filter_serializer = FilterParamsSerializer(data=request.query_params)
         if not filter_serializer.is_valid():
+            print("SERIALIZER ERRORS:", filter_serializer.errors)
             return Response(filter_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         filters = filter_serializer.validated_data
@@ -92,14 +99,24 @@ class CatalogView(APIView):
         if color:
             products = products.filter(color__iexact=color)
         
-        # Фильтрация по цене
+        # ФИЛЬТРАЦИЯ ПО ЦЕНЕ (С УЧЁТОМ СКИДКИ)
         min_price = filters.get('min_price')
-        if min_price is not None:
-            products = products.filter(price__gte=min_price)
-        
         max_price = filters.get('max_price')
-        if max_price is not None:
-            products = products.filter(price__lte=max_price)
+        
+        if min_price is not None or max_price is not None:
+            # Создаём аннотацию с эффективной ценой (цена со скидкой или обычная)
+            products = products.annotate(
+                effective_price=Case(
+                    When(is_on_sale=True, then=F('sale_price')),
+                    default=F('price'),
+                    output_field=DecimalField(max_digits=10, decimal_places=2)
+                )
+            )
+            
+            if min_price is not None:
+                products = products.filter(effective_price__gte=min_price)
+            if max_price is not None:
+                products = products.filter(effective_price__lte=max_price)
         
         # Фильтрация по размеру
         size = filters.get('size')
@@ -110,9 +127,9 @@ class CatalogView(APIView):
         sort = filters.get('sort')
         if sort:
             if sort == 'price_asc':
-                products = products.order_by('price')
+                products = products.order_by('effective_price')  
             elif sort == 'price_desc':
-                products = products.order_by('-price')
+                products = products.order_by('-effective_price')  
             elif sort == 'name_asc':
                 products = products.order_by('name')
             else:  # newest
@@ -238,9 +255,6 @@ class CategoryListView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        #categories = Category.objects.all()
-        #serializer = CategorySerializer(categories, many=True)
-
         # Получаем только корневые категории (без родителей)
         root_categories = Category.objects.filter(parent__isnull=True).order_by('id')
         serializer = CategorySerializer(root_categories, many=True)
@@ -297,7 +311,7 @@ class SearchSuggestionsView(APIView):
             })
         
         return Response({
-            'suggestions': suggestions[:10],  # Ограничиваем до 10 результатов
+            'suggestions': suggestions[:10],
             'query': query
         }, status=status.HTTP_200_OK)
 

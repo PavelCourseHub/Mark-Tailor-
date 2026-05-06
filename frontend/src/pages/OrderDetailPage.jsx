@@ -64,12 +64,8 @@ const OrderDetailPage = () => {
   };
 
   const formatPrice = (price) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "BYN",
-      minimumFractionDigits: 2,
-    }).format(price);
-  };
+    return `${Math.round(price)} BYN`;
+};
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString("en-US", {
