@@ -150,7 +150,7 @@ const CategoriesSection = ({ categories }) => {
             <div className="aspect-w-16 aspect-h-9">
               {category.image_url ? (
                 <img
-                  src={category.image_url}
+                  src={category.image_url ? `http://localhost:8000${category.image_url}` : null}
                   alt={category.name}
                   className="w-full h-64 object-cover group-hover:scale-105 transition duration-300"
                 />
