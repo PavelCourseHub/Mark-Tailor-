@@ -2,7 +2,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
-from django.db.models import Q, Case, When, F, DecimalField
+from django.db.models import Q, Case, When, F, Min, Max, DecimalField
+from django.db import models
 from django.shortcuts import get_object_or_404
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 import logging
@@ -74,6 +75,14 @@ class CatalogView(APIView):
         # Начинаем с базового queryset
         products = Product.objects.filter(is_active=True).select_related('category').prefetch_related('product_sizes__size')
         
+        products = products.annotate(
+            effective_price=Case(
+                When(is_on_sale=True, then=F('sale_price')),
+                default=F('price'),
+                output_field=DecimalField(max_digits=10, decimal_places=2)
+            )
+        )
+
         # Фильтрация по категории
         category_slug = filters.get('category')
         current_category = None
@@ -99,24 +108,14 @@ class CatalogView(APIView):
         if color:
             products = products.filter(color__iexact=color)
         
-        # ФИЛЬТРАЦИЯ ПО ЦЕНЕ (С УЧЁТОМ СКИДКИ)
+        # Фильтрация по цене (с учётом скидки)
         min_price = filters.get('min_price')
         max_price = filters.get('max_price')
         
-        if min_price is not None or max_price is not None:
-            # Создаём аннотацию с эффективной ценой (цена со скидкой или обычная)
-            products = products.annotate(
-                effective_price=Case(
-                    When(is_on_sale=True, then=F('sale_price')),
-                    default=F('price'),
-                    output_field=DecimalField(max_digits=10, decimal_places=2)
-                )
-            )
-            
-            if min_price is not None:
-                products = products.filter(effective_price__gte=min_price)
-            if max_price is not None:
-                products = products.filter(effective_price__lte=max_price)
+        if min_price is not None:
+            products = products.filter(effective_price__gte=min_price)
+        if max_price is not None:
+            products = products.filter(effective_price__lte=max_price)
         
         # Фильтрация по размеру
         size = filters.get('size')
@@ -200,10 +199,22 @@ class CatalogView(APIView):
         return Response(response_data, status=status.HTTP_200_OK)
     
     def get_price_range(self):
-        """Получить диапазон цен для фильтра"""
-        from django.db import models
-        min_price = Product.objects.aggregate(min_price=models.Min('price'))['min_price']
-        max_price = Product.objects.aggregate(max_price=models.Max('price'))['max_price']
+        """Получить диапазон цен для фильтра (с учётом скидок)"""
+        
+        price_stats = Product.objects.filter(is_active=True).annotate(
+            effective_price=Case(
+                When(is_on_sale=True, then=F('sale_price')),
+                default=F('price'),
+                output_field=DecimalField(max_digits=10, decimal_places=2)
+            )
+        ).aggregate(
+            min_price=Min('effective_price'),
+            max_price=Max('effective_price')
+        )
+        
+        min_price = price_stats['min_price']
+        max_price = price_stats['max_price']
+        
         return {
             'min': float(min_price) if min_price else 0,
             'max': float(max_price) if max_price else 1000

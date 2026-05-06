@@ -102,18 +102,18 @@ const HomePage = () => {
 
 // Hero Section Component
 const HeroSection = ({ user }) => {
+  // Формируем приветствие в зависимости от того, авторизован пользователь или нет
+  const greeting = user 
+    ? `Добро пожаловать, ${user.first_name}!` 
+    : 'Добро пожаловать в Mark Tailor';
+
   return (
     <div className="relative bg-black text-white">
-      <div className="absolute inset-0">
-        <div className="w-full h-full bg-gray-800 flex items-center justify-center opacity-50">
-          <span className="text-white text-4xl">Mark Tailor</span>
-        </div>
-      </div>
       <div className="relative max-w-7xl mx-auto px-4 py-24 sm:px-6 lg:px-8 text-center">
-        <h1 className="text-4xl md:text-6xl font-bold tracking-tight">
-          Добро пожаловать в Mark Tailor
+        <h1 className="text-4xl md:text-6xl font-bold tracking-tight text-white">
+          {greeting}
         </h1>
-        <p className="mt-6 text-xl max-w-2xl mx-auto">
+        <p className="mt-6 text-xl max-w-2xl mx-auto text-gray-200">
           Откройте для себя нашу коллекцию одежды премиум-класса, созданную специально для вас
         </p>
         <div className="mt-10">
@@ -124,11 +124,6 @@ const HeroSection = ({ user }) => {
             Купить сейчас
           </Link>
         </div>
-        {user && (
-          <p className="mt-4 text-sm">
-            Добро пожаловать, {user.first_name}!
-          </p>
-        )}
       </div>
     </div>
   );

@@ -218,7 +218,7 @@ class ForgotPasswordView(APIView):
             send_mail(
                 subject,
                 message,
-                'noreply@marktailor.com',
+                'info@marktailor.com',
                 [email],
                 fail_silently=False,
             )

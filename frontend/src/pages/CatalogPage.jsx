@@ -8,6 +8,8 @@ const CatalogPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [sizes, setSizes] = useState([]);
+  const [colors, setColors] = useState([]); 
   const [loading, setLoading] = useState(true);
   const [filterOpen, setFilterOpen] = useState(false);
   const { addToCart } = useCart();
@@ -26,6 +28,8 @@ const CatalogPage = () => {
   useEffect(() => {
     fetchCatalog();
     fetchCategories();
+    fetchSizes();
+    fetchColors(); 
   }, [searchParams]);
 
   const fetchCatalog = async () => {
@@ -58,6 +62,25 @@ const CatalogPage = () => {
     }
   };
 
+  const fetchSizes = async () => {
+    try {
+      const response = await productsAPI.getFilterOptions();
+      setSizes(response.data.sizes);
+    } catch (error) {
+      console.error("Ошибка при получении размеров:", error);
+    }
+  };
+
+  const fetchColors = async () => {
+    try {
+      const response = await productsAPI.getFilterOptions();
+      const uniqueColors = [...new Set(response.data.colors)];
+      setColors(uniqueColors);
+    } catch (error) {
+      console.error("Ошибка при получении цветов:", error);
+    }
+  };
+
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
     setFilters(prev => ({ ...prev, [name]: value }));
@@ -67,7 +90,6 @@ const CatalogPage = () => {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, value]) => {
       if (value && value !== "") {
-          // Для price преобразуем в число
         if (key === 'min_price' || key === 'max_price') {
           params.set(key, parseFloat(value));
         } else {
@@ -95,7 +117,7 @@ const CatalogPage = () => {
 
   const formatPrice = (price) => {
     return `${Math.round(price)} BYN`;
-};
+  };
 
   const handleAddToCart = async (product, sizeId = null) => {
     const result = await addToCart(product.slug, sizeId, 1);
@@ -184,11 +206,31 @@ const CatalogPage = () => {
                   className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-black"
                 >
                   <option value="">Все размеры</option>
-                  <option value="XS">XS</option>
-                  <option value="S">S</option>
-                  <option value="M">M</option>
-                  <option value="L">L</option>
-                  <option value="XL">XL</option>
+                  {sizes.map((size) => (
+                    <option key={size.id} value={size.name}>
+                      {size.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 👇 ДОБАВЛЕН ФИЛЬТР ПО ЦВЕТУ */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Цвет
+                </label>
+                <select
+                  name="color"
+                  value={filters.color}
+                  onChange={handleFilterChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-black"
+                >
+                  <option value="">Все цвета</option>
+                  {colors.map((color) => (
+                    <option key={color} value={color}>
+                      {color}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -231,6 +273,7 @@ const CatalogPage = () => {
                   name="sort"
                   value={filters.sort}
                   onChange={handleFilterChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-black"
                 >
                   <option value="newest">Новинки</option>
                   <option value="price_asc">Цена: по возрастанию</option>
