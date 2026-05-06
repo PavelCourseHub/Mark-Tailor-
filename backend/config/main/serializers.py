@@ -7,13 +7,28 @@ from decimal import Decimal
 class CategorySerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()
     children = serializers.SerializerMethodField()
+    all_images = serializers.SerializerMethodField()
     
     class Meta:
         model = Category
-        fields = ('id', 'name', 'slug', 'description', 'image', 'image_url', 'created_at', 
+        fields = ('id', 'name', 'slug', 'description', 'image', 'image_url', 
+                  'image_2', 'image_3', 'image_4', 'all_images', 'created_at', 
                   'parent', 'children', 'order')
         read_only_fields = ('id', 'created_at')
     
+    def get_all_images(self, obj):
+        """Собирает все непустые изображения категории"""
+        images = []
+        if obj.image:
+            images.append(obj.image.url)
+        if obj.image_2:
+            images.append(obj.image_2.url)
+        if obj.image_3:
+            images.append(obj.image_3.url)
+        if obj.image_4:
+            images.append(obj.image_4.url)
+        return images
+
     def get_image_url(self, obj):
         if obj.image:
             return obj.image.url

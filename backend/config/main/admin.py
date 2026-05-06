@@ -29,7 +29,7 @@ class CategoryAdmin(admin.ModelAdmin):
             'fields': ('name', 'slug', 'parent', 'order')
         }),
         ('Контент', {
-            'fields': ('description', 'image')
+            'fields': ('description', 'image', 'image_2', 'image_3', 'image_4')
         }),
     )
 

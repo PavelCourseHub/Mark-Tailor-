@@ -4,6 +4,7 @@ import { productsAPI } from '../api/products';
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
 import PlaceholderImage from '../components/PlaceholderImage';
+import CategorySlider from '../components/CategorySlider';
 
 const HomePage = () => {
   const [categories, setCategories] = useState([]);
@@ -147,17 +148,7 @@ const CategoriesSection = ({ categories }) => {
             to={`/catalog?category=${category.slug}`}
             className="group relative overflow-hidden rounded-lg shadow-lg hover:shadow-xl transition"
           >
-            <div className="aspect-w-16 aspect-h-9">
-              {category.image_url ? (
-                <img
-                  src={category.image_url ? `http://localhost:8000${category.image_url}` : null}
-                  alt={category.name}
-                  className="w-full h-64 object-cover group-hover:scale-105 transition duration-300"
-                />
-              ) : (
-                <PlaceholderImage width={400} height={300} text={category.name} />
-              )}
-            </div>
+            <CategorySlider category={category} />
             <div className="absolute inset-0 bg-black bg-opacity-40 group-hover:bg-opacity-30 transition">
               <div className="absolute bottom-0 left-0 right-0 p-4 text-white text-center">
                 <h3 className="text-xl font-semibold">{category.name}</h3>

@@ -19,6 +19,24 @@ class Category(models.Model):
         null=True,
         verbose_name='Изображение'
     )
+    image_2 = models.ImageField(
+        upload_to='categories/', 
+        blank=True, 
+        null=True,
+        verbose_name='Изображение 2'
+    )
+    image_3 = models.ImageField(
+        upload_to='categories/', 
+        blank=True, 
+        null=True,
+        verbose_name='Изображение 3'
+    )
+    image_4 = models.ImageField(
+        upload_to='categories/', 
+        blank=True, 
+        null=True,
+        verbose_name='Изображение 4'
+    )
     parent = models.ForeignKey(
         'self',
         on_delete=models.CASCADE,
@@ -103,6 +121,24 @@ class Product(models.Model):
             )
         ],
         verbose_name='Главное изображение'
+    )
+    image_2 = models.ImageField(
+        upload_to='categories/', 
+        blank=True, 
+        null=True,
+        verbose_name='Изображение 2'
+    )
+    image_3 = models.ImageField(
+        upload_to='categories/', 
+        blank=True, 
+        null=True,
+        verbose_name='Изображение 3'
+    )
+    image_4 = models.ImageField(
+        upload_to='categories/', 
+        blank=True, 
+        null=True,
+        verbose_name='Изображение 4'
     )
     stock = models.PositiveIntegerField(
         default=0,
