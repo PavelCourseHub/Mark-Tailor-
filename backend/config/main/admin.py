@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.utils.html import format_html
-from .models import Category, Product, Size, ProductSize, ProductImage
+from .models import Category, Product, Size, ProductSize, ProductImage, Subscriber
 
 
 class ProductSizeInline(admin.TabularInline):
@@ -71,3 +71,21 @@ class ProductAdmin(admin.ModelAdmin):
 class SizeAdmin(admin.ModelAdmin):
     list_display = ('name', 'value', 'sort_order')
     list_editable = ('sort_order',)
+
+
+@admin.register(Subscriber)
+class SubscriberAdmin(admin.ModelAdmin):
+    list_display = ('email', 'subscribed_at', 'is_active')
+    list_filter = ('is_active', 'subscribed_at')
+    search_fields = ('email',)
+    actions = ['activate_subscribers', 'deactivate_subscribers']
+    
+    def activate_subscribers(self, request, queryset):
+        queryset.update(is_active=True)
+        self.message_user(request, f'{queryset.count()} подписчик(ов) активированы')
+    activate_subscribers.short_description = 'Активировать выбранных подписчиков'
+    
+    def deactivate_subscribers(self, request, queryset):
+        queryset.update(is_active=False)
+        self.message_user(request, f'{queryset.count()} подписчик(ов) деактивированы')
+    deactivate_subscribers.short_description = 'Деактивировать выбранных подписчиков'

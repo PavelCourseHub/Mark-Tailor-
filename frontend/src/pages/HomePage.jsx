@@ -296,18 +296,26 @@ const PromoBanner = () => {
 const NewsletterSection = () => {
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!email) return;
     
+    setLoading(true);
+    setError('');
+    
     try {
-      console.log('Subscribing email:', email);
+      await productsAPI.subscribe(email);
       setSubscribed(true);
-      setTimeout(() => setSubscribed(false), 3000);
       setEmail('');
     } catch (error) {
-      console.error('Newsletter subscription error:', error);
+      console.error('Ошибка подписки:', error);
+      setError(error.response?.data?.error || error.response?.data?.message || 'Не удалось подписаться. Попробуйте позже.');
+      setTimeout(() => setError(''), 5000);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -321,7 +329,7 @@ const NewsletterSection = () => {
         
         {subscribed ? (
           <div className="max-w-md mx-auto bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
-            Спасибо за подписку!
+            ✅ Спасибо за подписку! Проверьте вашу почту.
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="max-w-md mx-auto flex flex-col sm:flex-row gap-4">
@@ -332,14 +340,22 @@ const NewsletterSection = () => {
               placeholder="Введите свой email"
               className="flex-1 px-4 py-3 border border-gray-300 focus:outline-none focus:border-black rounded"
               required
+              disabled={loading}
             />
             <button
               type="submit"
-              className="px-6 py-3 bg-black text-white font-semibold hover:bg-gray-800 transition rounded"
+              disabled={loading}
+              className="px-6 py-3 bg-black text-white font-semibold hover:bg-gray-800 transition rounded disabled:bg-gray-400"
             >
-              Подписаться
+              {loading ? 'Подписка...' : 'Подписаться'}
             </button>
           </form>
+        )}
+        
+        {error && (
+          <div className="mt-4 max-w-md mx-auto bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+            {error}
+          </div>
         )}
       </div>
     </div>

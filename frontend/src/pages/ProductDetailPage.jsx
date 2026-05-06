@@ -208,7 +208,13 @@ const ProductDetailPage = () => {
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">{product.name}</h1>
               <p className="text-gray-500 mb-4">{product.category_name}</p>
-              
+              {product.color && (
+                <div className="mb-4">
+                  <span className="text-sm text-gray-500">Цвет: </span>
+                  <span className="text-sm font-medium text-gray-900">{product.color}</span>
+                </div>
+              )}
+
               {/* Цены со скидкой */}
               <div className="mb-4">
                 {product.is_on_sale ? (

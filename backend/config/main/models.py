@@ -351,3 +351,20 @@ class Wishlist(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.product.name}"
+    
+
+class Subscriber(models.Model):
+    """
+    Модель для подписчиков рассылки
+    """
+    email = models.EmailField(unique=True, verbose_name='Email')
+    subscribed_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата подписки')
+    is_active = models.BooleanField(default=True, verbose_name='Активен')
+    
+    class Meta:
+        verbose_name = 'Подписчик'
+        verbose_name_plural = 'Подписчики'
+        ordering = ['-subscribed_at']
+    
+    def __str__(self):
+        return self.email

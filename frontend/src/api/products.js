@@ -6,4 +6,5 @@ export const productsAPI = {
   getCategories: () => apiClient.get('/api/categories/'),
   getSearchSuggestions: (query) => apiClient.get('/api/search/suggestions/', { params: { q: query } }),
   getFilterOptions: () => apiClient.get('/api/filter-options/'),
+  subscribe: (email) => apiClient.post('/api/subscribe/', { email }),
 };

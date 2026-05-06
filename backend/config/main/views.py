@@ -7,6 +7,9 @@ from django.db import models
 from django.shortcuts import get_object_or_404
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 import logging
+from django.core.mail import send_mail
+from django.conf import settings
+from .models import Subscriber
 
 from .models import Category, Product, Size
 from .serializers import (
@@ -351,3 +354,67 @@ class FilterOptionsView(APIView):
                 'max': float(price_range['max_price']) if price_range['max_price'] else 1000
             }
         }, status=status.HTTP_200_OK)
+    
+
+class SubscribeView(APIView):
+    """
+    Подписка на рассылку
+    """
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        email = request.data.get('email')
+        
+        if not email:
+            return Response({'error': 'Email is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Проверяем, не подписан ли уже пользователь
+        subscriber, created = Subscriber.objects.get_or_create(
+            email=email,
+            defaults={'is_active': True}
+        )
+        
+        if not created and subscriber.is_active:
+            return Response({
+                'message': 'Вы уже подписаны на нашу рассылку!'
+            }, status=status.HTTP_200_OK)
+        
+        if not created and not subscriber.is_active:
+            subscriber.is_active = True
+            subscriber.save()
+        
+        # Отправляем приветственное письмо
+        try:
+            subject = 'Добро пожаловать в рассылку Mark Tailor!'
+            message = f'''Здравствуйте!
+
+Спасибо за подписку на нашу рассылку!
+
+Мы будем присылать вам информацию о:
+• Новых коллекциях
+• Скидках и акциях
+• Специальных предложениях
+• Стильных образах
+
+Вы всегда можете отписаться от рассылки, перейдя по ссылке в любом нашем письме.
+
+С уважением,
+Команда Mark Tailor
+'''
+            
+            send_mail(
+                subject,
+                message,
+                'info@marktailor.com',
+                [email],
+                fail_silently=False,
+            )
+            
+            return Response({
+                'message': 'Спасибо за подписку! Проверьте вашу почту.'
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'error': 'Не удалось отправить письмо. Пожалуйста, попробуйте позже.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
