@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404
 from django.contrib.auth.tokens import default_token_generator
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode  # 👈 ДОБАВЬТЕ
 from django.utils.encoding import force_str, force_bytes
+from django.core.mail import send_mail
 
 from .serializers import (
     UserRegistrationSerializer,
@@ -199,9 +200,7 @@ class ForgotPasswordView(APIView):
             # Создаём ссылку на React фронтенд
             reset_link = f'http://localhost:3000/password-reset/confirm/{uid}/{token}/'
             
-            # Отправляем письмо
-            from django.core.mail import send_mail
-            
+            # Формируем письмо
             subject = 'Сброс пароля на Mark Tailor'
             message = f'''Здравствуйте!
 
@@ -218,20 +217,20 @@ class ForgotPasswordView(APIView):
             send_mail(
                 subject,
                 message,
-                'info@marktailor.com',
+                'Mark Tailor <info@marktailor.com>',
                 [email],
                 fail_silently=False,
             )
             
-            print(f"Reset link sent to {email}: {reset_link}")
+            print(f"Ссылка для сброса отправлена ​​на {email}: {reset_link}")
             
             return Response({
-                'message': 'Password reset link sent to your email'
+                'message': 'Ссылка для сброса пароля будет отправлена ​​на вашу электронную почту'
             }, status=status.HTTP_200_OK)
             
         except CustomUser.DoesNotExist:
             return Response({
-                'message': 'If an account with this email exists, a reset link has been sent'
+                'message': 'Если учетная запись с этим адресом электронной почты уже существует, ссылка для сброса была отправлена'
             }, status=status.HTTP_200_OK)
 
 #class ResetPasswordView(APIView):
