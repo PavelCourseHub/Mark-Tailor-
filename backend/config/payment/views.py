@@ -298,7 +298,6 @@ class StripeSuccessView(APIView):
     """
     Обработка успешной оплаты (редирект со Stripe)
     """
-    #permission_classes = [IsAuthenticated]
     permission_classes = [AllowAny]
 
     def get(self, request):
@@ -306,7 +305,7 @@ class StripeSuccessView(APIView):
         order_id = request.query_params.get('order_id')
         
         if not session_id:
-            return redirect('http://localhost:3000/cart') 
+            return redirect('http://localhost:3000/cart')
 
         try:
             if not order_id:
@@ -315,10 +314,11 @@ class StripeSuccessView(APIView):
             
             if order_id:
                 order = Order.objects.get(id=order_id)
+                
                 if order.status == 'pending':
                     order.status = 'processing'
                     order.save()
-
+                    
                     # УМЕНЬШАЕМ КОЛИЧЕСТВО ТОВАРА НА СКЛАДЕ
                     for item in order.items.select_related('product', 'size'):
                         product = item.product
@@ -339,19 +339,28 @@ class StripeSuccessView(APIView):
                             logger.info(f"Размер '{product_size.size.name}': остаток уменьшен на {item.quantity}, новый остаток: {product_size.stock}")
                         else:
                             logger.warning(f"Недостаточно размера '{product_size.size.name}'! Требуется: {item.quantity}, доступно: {product_size.stock}")
-                        
+                
+                # Очищаем корзину
                 if request.user.is_authenticated:
                     from cart.views import CartMixin
                     cart_mixin = CartMixin()
                     cart = cart_mixin.get_cart(request)
                     if cart and cart.total_items > 0:
                         cart.clear()
+                        logger.info(f"Cart cleared for user {request.user.email} after successful payment")
             
-            return redirect('http://localhost:3000/orders')
+                # Перенаправляем на страницу деталей заказа
+                return redirect(f'http://localhost:3000/orders/{order_id}')
             
+        except Order.DoesNotExist:
+            logger.error(f"Order {order_id} not found")
+        except stripe.error.StripeError as e:
+            logger.error(f"Stripe error on success: {str(e)}")
         except Exception as e:
-            logger.error(f"Ошибка при оплате: {str(e)}", exc_info=True)
-            return redirect('http://localhost:3000/cart')
+            logger.error(f"Error on payment success: {str(e)}", exc_info=True)
+        
+        # Если произошла ошибка, перенаправляем в корзину
+        return redirect('http://localhost:3000/cart')
 
 
 class StripeCancelView(APIView):

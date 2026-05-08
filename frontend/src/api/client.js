@@ -1,56 +1,54 @@
 import axios from 'axios';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 const apiClient = axios.create({
-  baseURL: 'http://localhost:8000',  // Без слеша в конце
+  baseURL: API_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
   },
 });
 
-// Интерсептор для запросов
+// Функция для получения CSRF токена
+const getCsrfToken = () => {
+    const name = 'csrftoken';
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+};
+
+// Единый интерсептор для всех запросов
 apiClient.interceptors.request.use(
   (config) => {
+    // Добавляем токен авторизации
     const token = localStorage.getItem('access_token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    console.log('Request URL:', config.baseURL + config.url);  // Для отладки
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-// Интерсептор для ответов
-apiClient.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const originalRequest = error.config;
     
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-      
-      try {
-        const refreshToken = localStorage.getItem('refresh_token');
-        const response = await axios.post('http://localhost:8000/api/token/refresh/', {
-          refresh: refreshToken,
-        });
-        
-        const { access } = response.data;
-        localStorage.setItem('access_token', access);
-        
-        originalRequest.headers.Authorization = `Bearer ${access}`;
-        return apiClient(originalRequest);
-      } catch (refreshError) {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        window.location.href = '/login';
-        return Promise.reject(refreshError);
+    // Добавляем CSRF токен для не-GET запросов
+    if (config.method !== 'get') {
+      const csrfToken = getCsrfToken();
+      if (csrfToken) {
+        config.headers['X-CSRFToken'] = csrfToken;
       }
     }
     
-    return Promise.reject(error);
-  }
+    console.log(`🚀 [${config.method?.toUpperCase()}] ${config.url}`);
+    return config;
+  },
+  (error) => Promise.reject(error)
 );
 
 export default apiClient;

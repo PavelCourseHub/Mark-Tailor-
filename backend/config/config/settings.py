@@ -82,6 +82,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 
     'allauth.account.middleware.AccountMiddleware',
+    #'cart.middleware.CartMiddleware',
 ]
 
 REST_FRAMEWORK = {
@@ -180,18 +181,27 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Sessions
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 SESSION_COOKIE_AGE = 86400  # 30 дней
 SESSION_SAVE_EVERY_REQUEST = True
-SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_HTTPONLY = False
 SESSION_COOKIE_SAMESITE = 'Lax'
+# Для разработки:
+SESSION_COOKIE_SECURE = False # True только для HTTPS
+SESSION_COOKIE_DOMAIN = None  # Не ограничиваем домен
 
 # CSRF
+CSRF_COOKIE_SECURE = False
+CSRF_COOKIE_HTTPONLY = False
+CSRF_COOKIE_SAMESITE = 'Lax'
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:8000",
 ]
-CSRF_COOKIE_SAMESITE = 'Lax'
-CSRF_COOKIE_HTTPONLY = False
+
+# Временно для тестирования
+#if DEBUG:
+#    MIDDLEWARE = [m for m in MIDDLEWARE if 'csrf' not in m.lower()]
 
 # Auth
 AUTH_USER_MODEL = 'users.CustomUser'

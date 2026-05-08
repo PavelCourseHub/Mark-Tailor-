@@ -24,6 +24,7 @@ class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
     total_price = serializers.DecimalField(max_digits=10, decimal_places=2, read_only=True)
     status_display = serializers.SerializerMethodField()
+    payment_method_display = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -31,12 +32,20 @@ class OrderSerializer(serializers.ModelSerializer):
                   'address1', 'address2', 'city', 'country', 'province', 
                   'postal_code', 'phone', 'special_instructions', 'status',
                   'status_display', 'total_price', 'created_at', 'updated_at', 'payment_provider', 
-                  'stripe_payment_intent_id', 'items')
+                  'payment_method_display', 'stripe_payment_intent_id', 'items')
         read_only_fields = ('id', 'user', 'status', 'status_display', 'created_at', 'updated_at', 'total_price')
 
     def get_status_display(self, obj):
         status_map = dict(Order.STATUS_CHOICES)
         return status_map.get(obj.status, obj.status)
+    
+    def get_payment_method_display(self, obj):  # 👈 ДОБАВИТЬ
+        """Возвращает человекочитаемое название способа оплаты"""
+        if obj.payment_provider == 'heleket':
+            return 'Оплата при получении'
+        elif obj.payment_provider == 'stripe':
+            return 'Банковская карта'
+        return obj.payment_provider or 'Не указан'
 
 class CheckoutRequestSerializer(serializers.Serializer):
     # Обязательные поля

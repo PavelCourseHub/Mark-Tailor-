@@ -26,6 +26,8 @@ class Cart(models.Model):
         max_length=40,
         null=True,
         blank=True,
+        # unique=True,
+        db_index=True,
         verbose_name='Ключ сессии'
     )
     created_at = models.DateTimeField(
@@ -83,24 +85,32 @@ class Cart(models.Model):
         Returns:
             CartItem: созданный или обновленный объект CartItem
         """
-        # Проверяем наличие на складе
-        if product_size.stock < quantity:
-            raise ValueError(f"Not enough stock. Available: {product_size.stock}")
-        
+        # Получаем существующий товар в корзине
         cart_item, created = CartItem.objects.get_or_create(
             cart=self,
             product=product,
             product_size=product_size,
-            defaults={'quantity': quantity}
+            defaults={'quantity': 0}  # Временно создаём с 0
         )
         
-        if not created:
+        # Рассчитываем новое количество
+        if created:
+            new_quantity = quantity
+        else:
             new_quantity = cart_item.quantity + quantity
-            if new_quantity > product_size.stock:
-                raise ValueError(
-                    f"Cannot add {quantity} items. "
-                    f"Only {product_size.stock - cart_item.quantity} more available."
-                )
+        
+        # Проверяем наличие на складе
+        if new_quantity > product_size.stock:
+            raise ValueError(
+                f"Cannot add {quantity} items. "
+                f"Only {product_size.stock - (cart_item.quantity if not created else 0)} more available."
+            )
+        
+        # Обновляем или создаём
+        if created:
+            cart_item.quantity = quantity
+            cart_item.save()
+        else:
             cart_item.quantity = new_quantity
             cart_item.save()
         

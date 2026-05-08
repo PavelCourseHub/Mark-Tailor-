@@ -1,9 +1,11 @@
+from cart.models import CartItem
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django.db import transaction
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 import logging
 import stripe
 from django.conf import settings
@@ -37,8 +39,8 @@ class CheckoutView(APIView):
         
         if cart.total_items == 0:
             return Response({
-                'error': 'Cart is empty',
-                'message': 'Your cart is empty'
+                'error': 'Корзина пуста',
+                'message': 'Ваша корзина пуста'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         cart_items = cart.items.select_related('product', 'product_size__size').order_by('-added_at')
@@ -97,8 +99,8 @@ class CheckoutView(APIView):
         
         if cart.total_items == 0:
             return Response({
-                'error': 'Cart is empty',
-                'message': 'Your cart is empty'
+                'error': 'Корзина пуста',
+                'message': 'Ваша корзина пуста'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         serializer = CheckoutRequestSerializer(
@@ -109,7 +111,7 @@ class CheckoutView(APIView):
         if not serializer.is_valid():
             logger.warning(f"Checkout validation error: {serializer.errors}")
             return Response({
-                'error': 'Validation error',
+                'error': 'Ошибка проверки',
                 'details': serializer.errors
             }, status=status.HTTP_400_BAD_REQUEST)
         
@@ -221,14 +223,37 @@ class CheckoutView(APIView):
             
             elif payment_provider == 'heleket':
                 # Для Heleket просто очищаем корзину
+                logger.info("Выбран способ оплаты при получении.")
+
+                # Списываем товары со склада
+                for item in cart.items.select_related('product', 'product_size'):
+                    product = item.product
+                    product_size = item.product_size
+                    
+                    # Уменьшаем общий остаток товара
+                    if product.stock >= item.quantity:
+                        product.stock -= item.quantity
+                        product.save()
+                        logger.info(f"Товар '{product.name}': остаток уменьшен на {item.quantity}, новый остаток: {product.stock}")
+                    else:
+                        logger.warning(f"Недостаточно товара '{product.name}' на складе! Требуется: {item.quantity}, доступно: {product.stock}")
+                    
+                    # Уменьшаем остаток конкретного размера
+                    if product_size.stock >= item.quantity:
+                        product_size.stock -= item.quantity
+                        product_size.save()
+                        logger.info(f"Размер '{product_size.size.name}': остаток уменьшен на {item.quantity}, новый остаток: {product_size.stock}")
+                    else:
+                        logger.warning(f"Недостаточно размера '{product_size.size.name}'! Требуется: {item.quantity}, доступно: {product_size.stock}")
+
+                 # Очищаем корзину
                 cart.clear()
-                logger.info("Выбран способ оплаты Heleket (пока не реализован).")
                 checkout_url = None
             
             order_serializer = OrderSerializer(order)
             response_data = {
                 'order': order_serializer.data,
-                'message': 'Order created successfully'
+                'message': 'Заказ успешно создан'
             }
             
             if checkout_url:
@@ -246,18 +271,43 @@ class CheckoutView(APIView):
 
 
 class OrderListView(APIView):
-    """Список заказов пользователя"""
+    """Список заказов пользователя с пагинацией"""
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
+        page = request.query_params.get('page', 1)
+        page_size = request.query_params.get('page_size', 10)
+        
+        try:
+            page_size = int(page_size)
+            page_size = min(page_size, 50)  # Ограничиваем максимум 50 заказов на страницу
+        except (TypeError, ValueError):
+            page_size = 10
+        
         orders = Order.objects.filter(user=request.user).order_by('-created_at')
-        serializer = OrderSerializer(orders, many=True)
+        
+        paginator = Paginator(orders, page_size)
+        
+        try:
+            orders_page = paginator.page(page)
+        except PageNotAnInteger:
+            orders_page = paginator.page(1)
+        except EmptyPage:
+            orders_page = paginator.page(paginator.num_pages)
+        
+        serializer = OrderSerializer(orders_page, many=True)
         
         return Response({
             'orders': serializer.data,
-            'count': orders.count()
+            'pagination': {
+                'current_page': orders_page.number,
+                'total_pages': paginator.num_pages,
+                'total_items': paginator.count,
+                'page_size': page_size,
+                'has_next': orders_page.has_next(),
+                'has_previous': orders_page.has_previous(),
+            }
         }, status=status.HTTP_200_OK)
-
 
 class OrderDetailView(APIView):
     """Детальная информация о заказе"""
@@ -282,6 +332,36 @@ class OrderCancelView(APIView):
                 'error': f'Cannot cancel order with status: {order.status}'
             }, status=status.HTTP_400_BAD_REQUEST)
         
+        # Возвращаем товары на склад и в корзину
+        from cart.views import CartMixin
+        cart_mixin = CartMixin()
+        cart = cart_mixin.get_cart(request)
+
+        for item in order.items.select_related('product', 'size'):
+            product = item.product
+            product_size = item.size
+            
+            # Возвращаем общий остаток товара
+            product.stock += item.quantity
+            product.save()
+            logger.info(f"Товар '{product.name}': остаток увеличен на {item.quantity}, новый остаток: {product.stock}")
+            
+            # Возвращаем остаток конкретного размера
+            product_size.stock += item.quantity
+            product_size.save()
+            logger.info(f"Размер '{product_size.size.name}': остаток увеличен на {item.quantity}, новый остаток: {product_size.stock}")
+        
+            # ВОЗВРАЩАЕМ ТОВАР В КОРЗИНУ
+            cart_item, created = CartItem.objects.get_or_create(
+                cart=cart,
+                product=product,
+                product_size=product_size,
+                defaults={'quantity': 0}
+            )
+            cart_item.quantity += item.quantity
+            cart_item.save()
+            logger.info(f"Товар '{product.name}' возвращён в корзину, количество: {cart_item.quantity}")
+
         order.status = 'cancelled'
         order.save()
         

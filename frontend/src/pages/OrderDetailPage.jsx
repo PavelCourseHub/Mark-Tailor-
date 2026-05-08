@@ -70,16 +70,39 @@ const OrderDetailPage = () => {
 
   const formatPrice = (price) => {
     return `${Math.round(price)} BYN`;
-};
+  };
 
+  // ✅ РУССКАЯ ЛОКАЛИЗАЦИЯ ДАТЫ
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
+    return new Date(dateString).toLocaleDateString("ru-RU", {
       year: "numeric",
       month: "long",
       day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
     });
+  };
+
+  // ✅ ПОЛУЧЕНИЕ ОТОБРАЖАЕМОГО НАЗВАНИЯ СПОСОБА ОПЛАТЫ
+  const getPaymentMethodDisplay = (provider) => {
+    if (provider === 'heleket') return 'Оплата при получении';
+    if (provider === 'stripe') return 'Банковская карта';
+    if (provider === 'cash') return 'Наличными';
+    return provider || 'Не указан';
+  };
+
+  // ✅ ПОЛУЧЕНИЕ ОТОБРАЖАЕМОГО СТАТУСА ПЛАТЕЖА
+  const getPaymentStatusDisplay = (orderStatus, paymentProvider) => {
+    if (orderStatus === 'cancelled') return 'Возврат';
+    if (orderStatus === 'delivered') return 'Оплачен';
+    if (orderStatus === 'processing') return 'В обработке';
+    if (orderStatus === 'pending') {
+      return paymentProvider === 'heleket' ? 'Ожидает оплаты при получении' : 'Ожидает оплаты';
+    }
+    if (orderStatus === 'completed') return 'Завершён';
+    if (orderStatus === 'shipped') return 'Отправлен';
+    if (orderStatus === 'failed') return 'Ошибка оплаты';
+    return 'Не указан';
   };
 
   const getCurrentStep = () => {
@@ -94,7 +117,7 @@ const OrderDetailPage = () => {
         <div className="max-w-4xl mx-auto px-4 py-8 sm:px-6">
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
-            <p className="mt-4 text-gray-600">Детали заказа...</p>
+            <p className="mt-4 text-gray-600">Загрузка деталей заказа...</p>
           </div>
         </div>
       </div>
@@ -106,7 +129,7 @@ const OrderDetailPage = () => {
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-4xl mx-auto px-4 py-8 sm:px-6">
           <div className="bg-red-50 border border-red-400 text-red-700 px-4 py-3 rounded">
-            <p>{error || "Order not found"}</p>
+            <p>{error || "Заказ не найден"}</p>
             <button
               onClick={() => navigate("/orders")}
               className="mt-2 text-sm underline hover:no-underline"
@@ -141,7 +164,7 @@ const OrderDetailPage = () => {
           <div className="flex flex-wrap justify-between items-start gap-4">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Заказ #{order.id}</h1>
-              <p className="text-gray-600 mt-1">Размещено на {formatDate(order.created_at)}</p>
+              <p className="text-gray-600 mt-1">Размещён {formatDate(order.created_at)}</p>
             </div>
             <div className="flex gap-3">
               {order.status === "pending" && (
@@ -165,11 +188,15 @@ const OrderDetailPage = () => {
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
             <h2 className="font-semibold text-gray-900 mb-6">Статус заказа</h2>
             <div className="relative">
-              {/* Progress Bar */}
-              <div className="absolute top-5 left-0 right-0 h-1 bg-gray-200">
+              {/* Progress Bar - с границей в конце */}
+              <div className="absolute top-5 left-0 w-full h-1 bg-gray-200 rounded-full overflow-visible">
                 <div
-                  className="h-full bg-green-500 transition-all duration-500"
-                  style={{ width: `${(currentStep - 1) * 33.33}%` }}
+                  className="h-full bg-green-500 transition-all duration-500 rounded-full"
+                  style={{ 
+                    width: `${Math.min((currentStep - 1) * 25, 100)}%`,
+                    borderRight: '2px solid #1f6e3f',
+                    boxSizing: 'border-box'
+                  }}
                 />
               </div>
               
@@ -181,9 +208,9 @@ const OrderDetailPage = () => {
                   const isCurrent = stepNumber === currentStep;
                   
                   return (
-                    <div key={step.key} className="text-center">
+                    <div key={step.key} className="text-center" style={{ flex: 1 }}>
                       <div
-                        className={`w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-2 transition ${
+                        className={`w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-2 transition z-10 relative ${
                           isCompleted
                             ? "bg-green-500 text-white"
                             : "bg-gray-200 text-gray-400"
@@ -254,12 +281,12 @@ const OrderDetailPage = () => {
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between py-1">
                   <span className="text-gray-600">Способ оплаты:</span>
-                  <span className="text-gray-900 capitalize">{order.payment_provider || "N/A"}</span>
+                  <span className="text-gray-900">{getPaymentMethodDisplay(order.payment_provider)}</span>
                 </div>
                 <div className="flex justify-between py-1">
-                  <span className="text-gray-600">Статут платежа:</span>
+                  <span className="text-gray-600">Статус платежа:</span>
                   <span className="text-gray-900">
-                    {order.status === "cancelled" ? "Refunded" : order.status === "delivered" ? "Paid" : "Pending"}
+                    {getPaymentStatusDisplay(order.status, order.payment_provider)}
                   </span>
                 </div>
                 {order.stripe_payment_intent_id && (

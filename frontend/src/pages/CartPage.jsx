@@ -122,7 +122,7 @@ const CartPage = () => {
                       disabled={updating}
                       className="text-sm text-red-500 hover:text-red-700"
                     >
-                      Удалять
+                      Удалить
                     </button>
                   </div>
                 </div>

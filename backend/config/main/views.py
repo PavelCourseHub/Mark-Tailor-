@@ -123,8 +123,13 @@ class CatalogView(APIView):
         # Фильтрация по размеру
         size = filters.get('size')
         if size:
-            products = products.filter(product_sizes__size__name__iexact=size)
-        
+            # Находим все ProductSize с нужным размером и остатком > 0
+            # Затем получаем уникальные товары, у которых есть хотя бы один такой размер
+            products = products.filter(
+                product_sizes__size__name__iexact=size,
+                product_sizes__stock__gt=0  # ← ГЛАВНОЕ: только размеры в наличии
+            ).distinct()
+                    
         # Сортировка
         sort = filters.get('sort')
         if sort:
@@ -339,7 +344,11 @@ class FilterOptionsView(APIView):
     def get(self, request):
         # Получаем уникальные значения для фильтров
         colors = Product.objects.filter(is_active=True).exclude(color__isnull=True).exclude(color='').values_list('color', flat=True).distinct()
-        sizes = Size.objects.all()
+        # Только размеры, которые есть в наличии (stock > 0)
+        sizes = Size.objects.filter(
+            product_sizes__stock__gt=0,
+            product_sizes__product__is_active=True
+        ).distinct()
         
         price_range = Product.objects.filter(is_active=True).aggregate(
             min_price=models.Min('price'),

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ordersAPI } from "../api/orders";
+import Pagination from '../components/Pagination';
 
 const STATUS_MAP = {
   pending: { label: "Ожидает оплаты", icon: "⏳", color: "bg-yellow-100 text-yellow-800" },
@@ -20,18 +21,29 @@ const OrderHistoryPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expandedOrder, setExpandedOrder] = useState(null);
+  
+  // Состояния пагинации
+  const [pagination, setPagination] = useState({
+    current_page: 1,
+    total_pages: 1,
+    total_items: 0,
+    page_size: 10,
+    has_next: false,
+    has_previous: false,
+  });
 
   useEffect(() => {
     fetchOrders();
-  }, []);
+  }, [pagination.current_page]);
 
   const fetchOrders = async () => {
     setLoading(true);
     setError("");
     
     try {
-      const response = await ordersAPI.getOrders();
+      const response = await ordersAPI.getOrders(pagination.current_page, pagination.page_size);
       setOrders(response.data.orders || []);
+      setPagination(response.data.pagination);
     } catch (err) {
       console.error("Ошибка при получении заказов:", err);
       setError("Не удалось загрузить заказы. Пожалуйста, попробуйте еще раз.");
@@ -40,18 +52,36 @@ const OrderHistoryPage = () => {
     }
   };
 
+  const handlePageChange = (newPage) => {
+    setPagination(prev => ({ ...prev, current_page: newPage }));
+    setExpandedOrder(null); // Закрываем развёрнутый заказ при смене страницы
+  };
+
   const formatPrice = (price) => {
     return `${Math.round(price)} BYN`;
-};
+  };
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
+    return new Date(dateString).toLocaleDateString("ru-RU", {
       year: "numeric",
       month: "long",
       day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
     });
+  };
+
+  const getItemsWord = (count) => {
+    if (count % 10 === 1 && count % 100 !== 11) return 'товар';
+    if (count % 10 >= 2 && count % 10 <= 4 && (count % 100 < 10 || count % 100 >= 20)) return 'товара';
+    return 'товаров';
+  };
+
+  const getPaymentMethodDisplay = (provider) => {
+    if (provider === 'heleket') return 'Оплата при получении';
+    if (provider === 'stripe') return 'Банковская карта';
+    if (provider === 'cash') return 'Наличными';
+    return provider || 'Не указан';
   };
 
   const toggleOrderExpand = (orderId) => {
@@ -123,12 +153,20 @@ const OrderHistoryPage = () => {
         <h1 className="text-3xl font-bold text-gray-900 mb-2">История заказов</h1>
         <p className="text-gray-600 mb-6">
           Просматривайте и отслеживайте все свои заказы.
+          {pagination.total_items > 0 && (
+            <span className="ml-2 text-sm text-gray-400">
+              Всего заказов: {pagination.total_items}
+            </span>
+          )}
         </p>
 
         <div className="space-y-4">
           {orders.map((order) => {
             const status = STATUS_MAP[order.status] || STATUS_MAP.pending;
             const isExpanded = expandedOrder === order.id;
+            
+            const firstItems = order.items?.slice(0, 3) || [];
+            const remainingCount = (order.items?.length || 0) - 3;
             
             return (
               <div
@@ -140,10 +178,10 @@ const OrderHistoryPage = () => {
                   className="p-4 cursor-pointer hover:bg-gray-50 transition"
                   onClick={() => toggleOrderExpand(order.id)}
                 >
-                  <div className="flex flex-wrap justify-between items-center gap-4">
+                  <div className="flex flex-wrap justify-between items-start gap-4">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 flex-wrap">
-                        <p className="text-sm text-gray-500">
+                        <p className="text-sm text-gray-500 font-medium">
                           Заказ #{order.id}
                         </p>
                         <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium ${status.color}`}>
@@ -153,6 +191,22 @@ const OrderHistoryPage = () => {
                       <p className="text-sm text-gray-500 mt-1">
                         {formatDate(order.created_at)}
                       </p>
+                      
+                      {/* Названия товаров (превью) */}
+                      {firstItems.length > 0 && (
+                        <div className="mt-2 text-sm text-gray-600">
+                          {firstItems.map((item, idx) => (
+                            <span key={idx}>
+                              {idx > 0 && ', '}
+                              <span className="font-medium">{item.product_name}</span>
+                              {item.quantity > 1 && ` (${item.quantity} шт.)`}
+                            </span>
+                          ))}
+                          {remainingCount > 0 && (
+                            <span className="text-gray-400"> и ещё {remainingCount} {getItemsWord(remainingCount)}</span>
+                          )}
+                        </div>
+                      )}
                     </div>
                     
                     <div className="text-right">
@@ -160,7 +214,7 @@ const OrderHistoryPage = () => {
                         {formatPrice(order.total_price)}
                       </p>
                       <p className="text-sm text-gray-500">
-                        {order.items?.length || 0} item(s)
+                        {order.items?.length || 0} {getItemsWord(order.items?.length || 0)}
                       </p>
                     </div>
                     
@@ -199,7 +253,9 @@ const OrderHistoryPage = () => {
                         </div>
                         <div>
                           <span className="text-gray-500">Оплата:</span>
-                          <span className="ml-2 text-gray-900 capitalize">{order.payment_provider || "N/A"}</span>
+                          <span className="ml-2 text-gray-900">
+                            {getPaymentMethodDisplay(order.payment_provider)}
+                          </span>
                         </div>
                         <div>
                           <span className="text-gray-500">Статус:</span>
@@ -234,12 +290,10 @@ const OrderHistoryPage = () => {
                             key={idx}
                             className="flex items-center gap-4 p-3 bg-white rounded-lg border border-gray-200"
                           >
-                            {/* Product Image Placeholder */}
                             <div className="w-16 h-20 bg-gray-100 rounded flex items-center justify-center">
                               <span className="text-2xl">👕</span>
                             </div>
                             
-                            {/* Product Info */}
                             <div className="flex-1">
                               <Link
                                 to={`/product/${item.product_slug || "#"}`}
@@ -257,7 +311,6 @@ const OrderHistoryPage = () => {
                               </div>
                             </div>
                             
-                            {/* Total */}
                             <div className="text-right">
                               <p className="font-semibold text-gray-900">
                                 {formatPrice(item.total_price || item.price * item.quantity)}
@@ -278,7 +331,7 @@ const OrderHistoryPage = () => {
                           </div>
                           <div className="flex gap-4 text-sm mt-1">
                             <span className="text-gray-500">Доставка:</span>
-                            <span>{order.shipping_cost ? formatPrice(order.shipping_cost) : "Free"}</span>
+                            <span>{order.shipping_cost ? formatPrice(order.shipping_cost) : "Бесплатно"}</span>
                           </div>
                           <div className="flex gap-4 text-lg font-bold mt-2 pt-2 border-t border-gray-200">
                             <span>Сумма:</span>
@@ -330,6 +383,13 @@ const OrderHistoryPage = () => {
             );
           })}
         </div>
+        
+        {/* Пагинация */}
+        <Pagination
+          currentPage={pagination.current_page}
+          totalPages={pagination.total_pages}
+          onPageChange={handlePageChange}
+        />
       </div>
     </div>
   );

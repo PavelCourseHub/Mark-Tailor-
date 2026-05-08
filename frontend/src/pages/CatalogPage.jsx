@@ -3,6 +3,7 @@ import { useSearchParams, Link } from "react-router-dom";
 import { productsAPI } from "../api/products";
 import { useCart } from "../contexts/CartContext";
 import PlaceholderImage from '../components/PlaceholderImage';
+import Pagination from '../components/Pagination';
 
 const CatalogPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -13,6 +14,16 @@ const CatalogPage = () => {
   const [loading, setLoading] = useState(true);
   const [filterOpen, setFilterOpen] = useState(false);
   const { addToCart } = useCart();
+  
+  // Состояния пагинации
+  const [pagination, setPagination] = useState({
+    current_page: 1,
+    total_pages: 1,
+    total_items: 0,
+    page_size: 20,
+    has_next: false,
+    has_previous: false,
+  });
   
   // Состояния фильтров
   const [filters, setFilters] = useState({
@@ -29,7 +40,7 @@ const CatalogPage = () => {
     fetchCatalog();
     fetchCategories();
     fetchSizes();
-    fetchColors(); 
+    fetchColors();
   }, [searchParams]);
 
   const fetchCatalog = async () => {
@@ -37,15 +48,24 @@ const CatalogPage = () => {
     try {
       const rawParams = Object.fromEntries(searchParams);
       const params = {};
-        for (const [key, value] of Object.entries(rawParams)) {
-            if (key === 'min_price' || key === 'max_price') {
-                params[key] = parseFloat(value);
-            } else {
-                params[key] = value;
-            }
+      for (const [key, value] of Object.entries(rawParams)) {
+        if (key === 'min_price' || key === 'max_price') {
+          params[key] = parseFloat(value);
+        } else if (key === 'page') {
+          params[key] = parseInt(value);
+        } else {
+          params[key] = value;
         }
+      }
+      
+      // Добавляем page_size по умолчанию
+      if (!params.page_size) {
+        params.page_size = 20;
+      }
+      
       const response = await productsAPI.getCatalog(params);
       setProducts(response.data.products);
+      setPagination(response.data.pagination);
     } catch (error) {
       console.error("Ошибка при получении каталога:", error);
     } finally {
@@ -97,7 +117,7 @@ const CatalogPage = () => {
         }
       }
     });
-    
+    params.set('page', '1'); // Сбрасываем на первую страницу при новом фильтре
     setSearchParams(params);
     setFilterOpen(false);
   };
@@ -112,7 +132,13 @@ const CatalogPage = () => {
       color: "",
       sort: "newest",
     });
-    setSearchParams({});
+    setSearchParams({ page: '1' });
+  };
+
+  const handlePageChange = (newPage) => {
+    const params = new URLSearchParams(searchParams);
+    params.set('page', newPage);
+    setSearchParams(params);
   };
 
   const formatPrice = (price) => {
@@ -147,12 +173,17 @@ const CatalogPage = () => {
         {/* Header */}
         <div className="flex flex-wrap justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-gray-900">Каталог</h1>
-          <button
-            onClick={() => setFilterOpen(!filterOpen)}
-            className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100 transition"
-          >
-            {filterOpen ? "Скрыть фильтры" : "Показать фильтры"}
-          </button>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-gray-500">
+              Найдено товаров: {pagination.total_items}
+            </span>
+            <button
+              onClick={() => setFilterOpen(!filterOpen)}
+              className="px-4 py-2 border border-gray-300 rounded hover:bg-gray-100 transition"
+            >
+              {filterOpen ? "Скрыть фильтры" : "Показать фильтры"}
+            </button>
+          </div>
         </div>
 
         {/* Filters Panel */}
@@ -214,7 +245,7 @@ const CatalogPage = () => {
                 </select>
               </div>
 
-              {/* 👇 ДОБАВЛЕН ФИЛЬТР ПО ЦВЕТУ */}
+              {/* Color */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Цвет
@@ -312,82 +343,91 @@ const CatalogPage = () => {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {products.map((product) => (
-              <div
-                key={product.id}
-                className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition relative"
-              >
-                {/* Бейдж со скидкой */}
-                {product.discount_percent > 0 && (
-                  <div className="absolute top-2 right-2 z-10">
-                    <div className="bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full shadow-md">
-                      -{product.discount_percent}%
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {products.map((product) => (
+                <div
+                  key={product.id}
+                  className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition relative"
+                >
+                  {/* Бейдж со скидкой */}
+                  {product.discount_percent > 0 && (
+                    <div className="absolute top-2 right-2 z-10">
+                      <div className="bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full shadow-md">
+                        -{product.discount_percent}%
+                      </div>
                     </div>
-                  </div>
-                )}
-
-                <Link to={`/product/${product.slug}`}>
-                  {product.image_url ? (
-                    <img
-                      src={`http://localhost:8000${product.image_url}`}
-                      alt={product.name}
-                      className="w-full h-64 object-cover hover:scale-105 transition duration-300"
-                      onError={(e) => {
-                        e.target.src = 'https://placehold.co/300x400/e5e7eb/9ca3af?text=No+Image';
-                      }}
-                    />
-                  ) : (
-                    <PlaceholderImage width={300} height={400} text={product.name} />
                   )}
-                </Link>
-                
-                <div className="p-4">
+
                   <Link to={`/product/${product.slug}`}>
-                    <h3 className="font-semibold text-gray-900 hover:text-gray-600 transition line-clamp-2 min-h-[56px]">
-                      {product.name}
-                    </h3>
+                    {product.image_url ? (
+                      <img
+                        src={`http://localhost:8000${product.image_url}`}
+                        alt={product.name}
+                        className="w-full h-64 object-cover hover:scale-105 transition duration-300"
+                        onError={(e) => {
+                          e.target.src = 'https://placehold.co/300x400/e5e7eb/9ca3af?text=No+Image';
+                        }}
+                      />
+                    ) : (
+                      <PlaceholderImage width={300} height={400} text={product.name} />
+                    )}
                   </Link>
-                  <p className="text-sm text-gray-500 mt-1">{product.category_name}</p>
                   
-                  {/* Цены со скидкой */}
-                  <div className="mt-2">
-                    {product.is_on_sale ? (
-                      <div className="flex items-center gap-3 flex-wrap">
-                        <div className="flex items-center gap-2">
-                          <div className="bg-red-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shadow-sm">
-                            %
+                  <div className="p-4">
+                    <Link to={`/product/${product.slug}`}>
+                      <h3 className="font-semibold text-gray-900 hover:text-gray-600 transition line-clamp-2 min-h-[56px]">
+                        {product.name}
+                      </h3>
+                    </Link>
+                    <p className="text-sm text-gray-500 mt-1">{product.category_name}</p>
+                    
+                    {/* Цены со скидкой */}
+                    <div className="mt-2">
+                      {product.is_on_sale ? (
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <div className="flex items-center gap-2">
+                            <div className="bg-red-600 text-white text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center shadow-sm">
+                              %
+                            </div>
+                            <span className="text-lg font-bold text-red-600">
+                              {Math.round(product.sale_price)} BYN
+                            </span>
                           </div>
-                          <span className="text-lg font-bold text-red-600">
-                            {Math.round(product.sale_price)} BYN
+                          <span className="text-sm text-gray-400 line-through ml-1">
+                            {Math.round(product.price)} BYN
                           </span>
                         </div>
-                        <span className="text-sm text-gray-400 line-through ml-1">
+                      ) : (
+                        <span className="text-lg font-bold text-gray-900">
                           {Math.round(product.price)} BYN
                         </span>
-                      </div>
-                    ) : (
-                      <span className="text-lg font-bold text-gray-900">
-                        {Math.round(product.price)} BYN
-                      </span>
-                    )}
+                      )}
+                    </div>
+                    
+                    <button
+                      onClick={() => handleAddToCart(product)}
+                      disabled={product.stock === 0}
+                      className={`mt-3 w-full py-2 text-sm font-semibold transition rounded ${
+                        product.stock === 0
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          : 'bg-black text-white hover:bg-gray-800'
+                      }`}
+                    >
+                      {product.stock === 0 ? 'Нет в наличии' : 'В корзину'}
+                    </button>
                   </div>
-                  
-                  <button
-                    onClick={() => handleAddToCart(product)}
-                    disabled={product.stock === 0}
-                    className={`mt-3 w-full py-2 text-sm font-semibold transition rounded ${
-                      product.stock === 0
-                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                        : 'bg-black text-white hover:bg-gray-800'
-                    }`}
-                  >
-                    {product.stock === 0 ? 'Нет в наличии' : 'В корзину'}
-                  </button>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+            
+            {/* Пагинация */}
+            <Pagination
+              currentPage={pagination.current_page}
+              totalPages={pagination.total_pages}
+              onPageChange={handlePageChange}
+            />
+          </>
         )}
       </div>
     </div>

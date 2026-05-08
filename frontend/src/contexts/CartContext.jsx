@@ -22,13 +22,35 @@ export const CartProvider = ({ children }) => {
     }
   };
 
+  // Слушаем событие обновления корзины
+  useEffect(() => {
+    fetchCart();
+    
+    const handleCartUpdate = () => {
+        console.log('🔄 Cart update event received, refetching cart');
+        fetchCart();
+    };
+    
+    window.addEventListener('cart-updated', handleCartUpdate);
+    return () => window.removeEventListener('cart-updated', handleCartUpdate);
+  }, []);
+
+  // Загружаем корзину для всех пользователей (включая неавторизованных)
+  useEffect(() => {
+    fetchCart();
+  }, []);
+
+  // Исправленная функция addToCart
   const addToCart = async (slug, sizeId, quantity) => {
     try {
       const response = await cartAPI.addToCart(slug, { size_id: sizeId, quantity });
+      console.log('Add to cart response:', response.data);
       setCart(response.data.cart);
       setCartCount(response.data.total_items);
+      
       return { success: true, data: response.data };
     } catch (error) {
+      console.error('Add to cart error:', error);
       return { 
         success: false, 
         error: error.response?.data?.error || 'Failed to add to cart' 
@@ -38,7 +60,7 @@ export const CartProvider = ({ children }) => {
 
   const updateQuantity = async (itemId, quantity) => {
     try {
-      const response = await cartAPI.updateItem(itemId, { quantity });
+      const response = await cartAPI.updateCartItem(itemId, { quantity });
       setCart(response.data.cart);
       setCartCount(response.data.cart.total_items);
       return { success: true };
@@ -52,7 +74,7 @@ export const CartProvider = ({ children }) => {
 
   const removeItem = async (itemId) => {
     try {
-      const response = await cartAPI.removeItem(itemId);
+      const response = await cartAPI.removeCartItem(itemId);
       setCart(response.data.cart);
       setCartCount(response.data.cart.total_items);
       return { success: true };
@@ -77,16 +99,6 @@ export const CartProvider = ({ children }) => {
       };
     }
   };
-
-  useEffect(() => {
-    // Загружаем корзину только если есть токен авторизации
-    const token = localStorage.getItem('access_token');
-    if (token) {
-      fetchCart();
-    } else {
-      setLoading(false);
-    }
-  }, []);
 
   const value = {
     cart,

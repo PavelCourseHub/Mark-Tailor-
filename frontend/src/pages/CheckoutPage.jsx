@@ -33,7 +33,7 @@ const CheckoutPage = () => {
   const formatPrice = (price) => {
     const num = typeof price === 'number' ? price : parseFloat(price || 0);
     return `${Math.round(num)} BYN`;
-};
+  };
 
   // Получение суммы корзины
   const getSubtotal = () => {
@@ -109,7 +109,7 @@ const CheckoutPage = () => {
         email: deliveryAddress.email,
         phone: deliveryAddress.phone || "",
         payment_provider: paymentMethod === "card" ? "stripe" : "heleket",
-        delivery_method: deliveryMethod,  // Отправляем способ доставки
+        delivery_method: deliveryMethod,
       };
 
       // Добавляем адресные поля ТОЛЬКО для курьерской доставки
@@ -140,9 +140,8 @@ const CheckoutPage = () => {
         // Редирект на страницу оплаты Stripe
         window.location.href = checkout_url;
       } else {
-        // Если оплата не требуется
-        await clearCart();
-        navigate("/payment/success", { state: { order } });
+        // Для оплаты при получении (Heleket) - перенаправляем на страницу подтверждения
+        navigate('/order-confirmation', { state: { order } });
       }
     } catch (err) {
       console.error("Checkout error:", err);
@@ -272,7 +271,7 @@ const CheckoutPage = () => {
                       name="address1"
                       value={deliveryAddress.address1}
                       onChange={handleAddressChange}
-                      placeholder="Street, House number"
+                      placeholder="Улица, номер дома"
                       className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-black"
                       required
                     />
@@ -287,7 +286,7 @@ const CheckoutPage = () => {
                       name="address2"
                       value={deliveryAddress.address2}
                       onChange={handleAddressChange}
-                      placeholder="Apartment, Suite, etc."
+                      placeholder="Квартира, офис, etc."
                       className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:border-black"
                     />
                   </div>
@@ -366,7 +365,7 @@ const CheckoutPage = () => {
                     className="w-4 h-4 text-black focus:ring-black"
                   />
                   <div className="ml-3">
-                    <p className="font-medium text-gray-900">Кредитная/дебетовая карта</p>
+                    <p className="font-medium text-gray-900">Банковская карта</p>
                     <p className="text-sm text-gray-500">Оплачивайте покупки безопасно через Stripe.</p>
                   </div>
                 </label>
@@ -384,7 +383,7 @@ const CheckoutPage = () => {
                   />
                   <div className="ml-3">
                     <p className="font-medium text-gray-900">Оплата при получении</p>
-                    <p className="text-sm text-gray-500">Оплатите заказ при его получении.</p>
+                    <p className="text-sm text-gray-500">Оплатите заказ наличными или картой при получении.</p>
                   </div>
                 </label>
               </div>
@@ -414,7 +413,7 @@ const CheckoutPage = () => {
               
               <div className="border-t pt-4 space-y-2">
                 <div className="flex justify-between text-gray-600">
-                  <span>Subtotal</span>
+                  <span>Итого</span>
                   <span>{formatPrice(getSubtotal())}</span>
                 </div>
                 <div className="flex justify-between text-gray-600">

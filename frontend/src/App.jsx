@@ -17,6 +17,7 @@ import CartPage from './pages/CartPage';
 import PaymentSuccess from './pages/PaymentSuccess';
 import PaymentCancel from './pages/PaymentCancel';
 import PasswordResetConfirm from './pages/PasswordResetConfirm';
+import OrderConfirmationPage from './pages/OrderConfirmationPage';
 
 // Импорт компонентов
 import Header from './components/Header';
@@ -35,6 +36,7 @@ function App() {
                 {/* Публичные маршруты */}
                 <Route path="/" element={<HomePage />} />
                 <Route path="/login" element={<AuthPage />} />
+                <Route path="/order-confirmation" element={<OrderConfirmationPage />} />
                 <Route 
                   path="/checkout" 
                   element={

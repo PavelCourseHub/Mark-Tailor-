@@ -8,7 +8,8 @@ from .views import (
     ClearCartView,
     CartSummaryView,
     CartItemDetailView,
-    MergeCartView
+    MergeCartView,
+    SessionKeyView
 )
 
 app_name = 'cart'  # Добавьте эту строку
@@ -23,4 +24,5 @@ urlpatterns = [
     path('api/cart/item/<int:item_id>/', CartItemDetailView.as_view(), name='api_cart_item'),
     path('api/cart/item/<int:item_id>/update/', UpdateCartItemView.as_view(), name='api_update_cart_item'),
     path('api/cart/item/<int:item_id>/remove/', RemoveCartItemView.as_view(), name='api_remove_cart_item'),
+    path('api/session-key/', SessionKeyView.as_view(), name='session_key'),
 ]
