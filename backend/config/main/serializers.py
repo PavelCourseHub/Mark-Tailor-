@@ -1,8 +1,82 @@
 from rest_framework import serializers
-from .models import Category, Product, Size, ProductSize, ProductImage
+from .models import Category, Product, Size, ProductSize, ProductImage, Review, Coupon
 from decimal import Decimal
 
 
+# ==================== ОТЗЫВЫ ====================
+
+class ReviewSerializer(serializers.ModelSerializer):
+    user_name = serializers.CharField(source='user.get_full_name', read_only=True)
+    user_email = serializers.CharField(source='user.email', read_only=True)
+    is_owner = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Review
+        fields = ('id', 'product', 'user', 'user_name', 'user_email', 'rating', 
+                  'comment', 'image', 'is_verified_purchase', 'is_approved',
+                  'helpful_count', 'created_at', 'is_owner')
+        read_only_fields = ('id', 'user', 'is_verified_purchase', 'is_approved', 
+                           'helpful_count', 'created_at')
+    
+    def get_is_owner(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.user == request.user
+        return False
+
+
+class ReviewCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Review
+        fields = ('rating', 'comment', 'image')
+    
+    def validate(self, data):
+        """Дополнительная валидация"""
+        if not data.get('comment') or len(data['comment'].strip()) < 5:
+            raise serializers.ValidationError({'comment': 'Комментарий должен содержать минимум 5 символов'})
+        
+        if data.get('rating') and (data['rating'] < 1 or data['rating'] > 5):
+            raise serializers.ValidationError({'rating': 'Оценка должна быть от 1 до 5'})
+        
+        return data
+    
+    def create(self, validated_data):
+        request = self.context.get('request')
+        product = self.context.get('product')  # Получаем product из контекста
+        
+        if not product:
+            raise serializers.ValidationError({'product': 'Product is required'})
+        
+        validated_data['user'] = request.user
+        validated_data['product'] = product
+        
+        # Проверяем, покупал ли пользователь этот товар
+        from orders.models import OrderItem
+        has_purchased = OrderItem.objects.filter(
+            order__user=request.user,
+            order__status__in=['delivered', 'completed'],
+            product=product
+        ).exists()
+        
+        validated_data['is_verified_purchase'] = has_purchased
+        validated_data['is_approved'] = False  # Требует модерации
+        
+        return super().create(validated_data)
+
+
+# ==================== ПРОМОКОДЫ ====================
+
+class CouponSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Coupon
+        fields = ('code', 'discount_type', 'discount_value', 'min_order_amount',
+                  'max_discount_amount', 'valid_from', 'valid_to')
+        read_only_fields = ('code',)
+
+
+class CouponValidateSerializer(serializers.Serializer):
+    code = serializers.CharField(max_length=50, required=True)
+    cart_total = serializers.DecimalField(max_digits=10, decimal_places=2, required=True)
 
 class CategorySerializer(serializers.ModelSerializer):
     image_url = serializers.SerializerMethodField()

@@ -171,13 +171,11 @@ class Product(models.Model):
     def calculate_sale_price(self):
         """Рассчитать цену со скидкой"""
         if self.discount_percent > 0:
-            # Преобразуем проценты в Decimal
             discount = Decimal(self.discount_percent) / Decimal(100)
             return self.price * (Decimal(1) - discount)
         return self.price
     
     def save(self, *args, **kwargs):
-        # Генерация slug
         if not self.slug:
             base_slug = slugify(self.name)
             slug = base_slug
@@ -187,7 +185,6 @@ class Product(models.Model):
                 counter += 1
             self.slug = slug
         
-        # Автоматически рассчитываем цену со скидкой
         self.sale_price = self.calculate_sale_price()
         self.is_on_sale = self.discount_percent > 0
         
@@ -197,16 +194,15 @@ class Product(models.Model):
         return self.name
 
     def get_available_stock(self):
-        """Получить общий доступный остаток"""
         return self.stock
 
     def is_in_stock(self):
-        """Проверить наличие товара"""
         return self.stock > 0 and self.is_active
 
     def get_average_rating(self):
-        """Получить средний рейтинг товара"""
-        return 0
+        from .models import Review
+        result = self.reviews.filter(is_approved=True).aggregate(avg=models.Avg('rating'))
+        return result['avg'] or 0
 
     class Meta:
         verbose_name = 'Товар'
@@ -281,20 +277,20 @@ class ProductImage(models.Model):
         return f"Image for {self.product.name}"
 
 
-class ProductReview(models.Model):
+class Review(models.Model):
     """
-    Отзывы на товары (добавлено для полноты функционала)
+    Отзывы на товары
     """
     RATING_CHOICES = [
-        (1, '1 - Ужасно'),
-        (2, '2 - Плохо'),
-        (3, '3 - Нормально'),
-        (4, '4 - Хорошо'),
-        (5, '5 - Отлично'),
+        (1, '1 ★ - Ужасно'),
+        (2, '2 ★ - Плохо'),
+        (3, '3 ★ - Нормально'),
+        (4, '4 ★ - Хорошо'),
+        (5, '5 ★ - Отлично'),
     ]
     
     product = models.ForeignKey(
-        Product, 
+        Product,
         on_delete=models.CASCADE,
         related_name='reviews',
         verbose_name='Товар'
@@ -305,13 +301,38 @@ class ProductReview(models.Model):
         related_name='reviews',
         verbose_name='Пользователь'
     )
+    order = models.ForeignKey(
+        'orders.Order',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='reviews',
+        verbose_name='Заказ'
+    )
     rating = models.PositiveSmallIntegerField(
         choices=RATING_CHOICES,
         validators=[MinValueValidator(1), MaxValueValidator(5)],
         verbose_name='Оценка'
     )
-    comment = models.TextField(blank=True, verbose_name='Комментарий')
-    is_approved = models.BooleanField(default=False, verbose_name='Одобрен')
+    comment = models.TextField(max_length=1000, verbose_name='Комментарий')
+    image = models.ImageField(
+        upload_to='reviews/',
+        null=True,
+        blank=True,
+        verbose_name='Фото'
+    )
+    is_verified_purchase = models.BooleanField(
+        default=False,
+        verbose_name='Подтверждённая покупка'
+    )
+    is_approved = models.BooleanField(
+        default=False,
+        verbose_name='Одобрен'
+    )
+    helpful_count = models.PositiveIntegerField(
+        default=0,
+        verbose_name='Полезные голоса'
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
     updated_at = models.DateTimeField(auto_now=True, verbose_name='Дата обновления')
 
@@ -320,9 +341,133 @@ class ProductReview(models.Model):
         verbose_name_plural = 'Отзывы'
         ordering = ['-created_at']
         unique_together = ['product', 'user']
+        indexes = [
+            models.Index(fields=['product', 'is_approved']),
+            models.Index(fields=['-created_at']),
+        ]
 
     def __str__(self):
-        return f"Review by {self.user.username} for {self.product.name} - {self.rating} stars"
+        return f"Review by {self.user.email} for {self.product.name} - {self.rating}★"
+
+
+class Coupon(models.Model):
+    """
+    Промокоды и купоны
+    """
+    DISCOUNT_TYPE_CHOICES = [
+        ('percent', 'Процент (%)'),
+        ('fixed', 'Фиксированная сумма (BYN)'),
+    ]
+    
+    code = models.CharField(
+        max_length=50,
+        unique=True,
+        db_index=True,
+        verbose_name='Код промокода'
+    )
+    discount_type = models.CharField(
+        max_length=10,
+        choices=DISCOUNT_TYPE_CHOICES,
+        default='percent',
+        verbose_name='Тип скидки'
+    )
+    discount_value = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name='Значение скидки'
+    )
+    
+    min_order_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0,
+        verbose_name='Минимальная сумма заказа'
+    )
+    max_discount_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        verbose_name='Максимальная сумма скидки'
+    )
+    
+    usage_limit = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name='Лимит использований (всего)'
+    )
+    per_user_limit = models.PositiveIntegerField(
+        default=1,
+        verbose_name='Лимит на пользователя'
+    )
+    used_count = models.PositiveIntegerField(
+        default=0,
+        verbose_name='Количество использований'
+    )
+    
+    applicable_categories = models.ManyToManyField(
+        Category,
+        blank=True,
+        verbose_name='Применяется к категориям'
+    )
+    applicable_products = models.ManyToManyField(
+        Product,
+        blank=True,
+        verbose_name='Применяется к товарам'
+    )
+    
+    valid_from = models.DateTimeField(verbose_name='Действует с')
+    valid_to = models.DateTimeField(verbose_name='Действует до')
+    
+    is_active = models.BooleanField(default=True, verbose_name='Активен')
+    
+    created_by = models.ForeignKey(
+        'users.CustomUser',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='created_coupons',
+        verbose_name='Создал'
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Дата создания')
+    updated_at = models.DateTimeField(auto_now=True, verbose_name='Дата обновления')
+    
+    class Meta:
+        verbose_name = 'Промокод'
+        verbose_name_plural = 'Промокоды'
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.code} - {self.discount_value}{'%' if self.discount_type == 'percent' else ' BYN'}"
+    
+    def is_valid(self, user=None, cart_total=0):
+        from django.utils import timezone
+        
+        if not self.is_active:
+            return False, "Промокод не активен"
+        
+        now = timezone.now()
+        if now < self.valid_from:
+            return False, "Промокод ещё не активен"
+        if now > self.valid_to:
+            return False, "Промокод истёк"
+        
+        if self.usage_limit and self.used_count >= self.usage_limit:
+            return False, "Промокод больше недоступен"
+        
+        if cart_total < self.min_order_amount:
+            return False, f"Минимальная сумма заказа для этого промокода: {self.min_order_amount} BYN"
+        
+        return True, "OK"
+    
+    def calculate_discount(self, cart_total):
+        if self.discount_type == 'percent':
+            discount = cart_total * self.discount_value / 100
+            if self.max_discount_amount:
+                discount = min(discount, self.max_discount_amount)
+        else:
+            discount = min(self.discount_value, cart_total)
+        return discount
 
 
 class Wishlist(models.Model):

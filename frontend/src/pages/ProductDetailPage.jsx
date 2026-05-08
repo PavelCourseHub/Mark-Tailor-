@@ -4,6 +4,7 @@ import { productsAPI } from "../api/products";
 import { useCart } from "../contexts/CartContext";
 import PlaceholderImage from '../components/PlaceholderImage';
 import SizeTable from '../components/SizeTable';
+import ReviewSection from '../components/ReviewSection';
 
 const ProductDetailPage = () => {
   const { slug } = useParams();
@@ -22,14 +23,12 @@ const ProductDetailPage = () => {
   
   const { addToCart } = useCart();
 
-  // Функция для получения правильного URL изображения
   const getImageUrl = (imagePath) => {
     if (!imagePath) return null;
     if (imagePath.startsWith('http')) return imagePath;
     return `http://localhost:8000${imagePath}`;
   };
 
-  // Определяем категорию для таблицы размеров
   const getSizeTableCategory = () => {
     const categoryName = product?.category_name?.toLowerCase();
     if (categoryName === 'женщины') return 'women';
@@ -51,10 +50,7 @@ const ProductDetailPage = () => {
       setProduct(response.data.product);
       setRelatedProducts(response.data.related_products || []);
       
-      // Собираем все изображения для слайдера
       const images = [];
-      
-      // Добавляем главное изображение
       if (response.data.product.main_image) {
         images.push({
           id: 'main',
@@ -62,20 +58,13 @@ const ProductDetailPage = () => {
           alt_text: response.data.product.name
         });
       }
-      
-      // Добавляем дополнительные изображения
       if (response.data.product.images && response.data.product.images.length > 0) {
         images.push(...response.data.product.images);
       }
-      
       setAllImages(images);
-      
-      // Устанавливаем первое изображение как выбранное
       if (images.length > 0) {
         setSelectedImage(images[0].image);
       }
-      
-      // Auto-select first available size
       if (response.data.product.sizes && response.data.product.sizes.length > 0) {
         setSelectedSize(response.data.product.sizes[0]);
       }
@@ -114,7 +103,6 @@ const ProductDetailPage = () => {
     setAddingToCart(false);
   };
 
-  // Функция для получения цены со скидкой
   const getCurrentPrice = () => {
     if (product?.is_on_sale) {
       return product.sale_price;
@@ -141,7 +129,6 @@ const ProductDetailPage = () => {
 
   return (
     <>
-      {/* Таблица размеров (модальное окно) */}
       {showSizeTable && (
         <SizeTable 
           category={getSizeTableCategory()}
@@ -170,7 +157,6 @@ const ProductDetailPage = () => {
 
           {/* Product Detail */}
           <div className="bg-white rounded-lg shadow-md overflow-hidden">
-            {/* Бейдж со скидкой на странице товара */}
             {product.discount_percent > 0 && (
               <div className="absolute top-4 right-4 z-20 ml-4 mt-4">
                 <div className="bg-red-600 text-white text-sm font-bold px-3 py-1.5 rounded-full shadow-md">
@@ -180,9 +166,8 @@ const ProductDetailPage = () => {
             )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-6">
-              {/* Product Images with Slider */}
+              {/* Product Images */}
               <div>
-                {/* Main Image */}
                 <div className="mb-4 relative">
                   {selectedImage ? (
                     <img
@@ -198,7 +183,6 @@ const ProductDetailPage = () => {
                   )}
                 </div>
                 
-                {/* Thumbnails Slider */}
                 {allImages.length > 1 && (
                   <div className="flex gap-2 overflow-x-auto pb-2">
                     {allImages.map((img, index) => (
@@ -230,7 +214,6 @@ const ProductDetailPage = () => {
                 <h1 className="text-3xl font-bold text-gray-900 mb-2">{product.name}</h1>
                 <p className="text-gray-500 mb-4">{product.category_name}</p>
                 
-                {/* Цвет */}
                 {product.color && (
                   <div className="mb-4">
                     <span className="text-sm text-gray-500">Цвет: </span>
@@ -238,29 +221,18 @@ const ProductDetailPage = () => {
                   </div>
                 )}
                 
-                {/* Цены со скидкой */}
                 <div className="mb-4">
                   {product.is_on_sale ? (
                     <div className="flex items-center gap-4 flex-wrap">
                       <div className="flex items-center gap-3">
-                        <div className="bg-red-600 text-white text-sm font-bold w-8 h-8 rounded-full flex items-center justify-center shadow-md">
-                          %
-                        </div>
-                        <span className="text-3xl font-bold text-red-600">
-                          {formatPrice(product.sale_price)}
-                        </span>
+                        <div className="bg-red-600 text-white text-sm font-bold w-8 h-8 rounded-full flex items-center justify-center shadow-md">%</div>
+                        <span className="text-3xl font-bold text-red-600">{formatPrice(product.sale_price)}</span>
                       </div>
-                      <span className="text-xl text-gray-400 line-through">
-                        {formatPrice(product.price)}
-                      </span>
-                      <span className="bg-red-600 text-white text-sm font-bold px-3 py-1 rounded-full">
-                        -{product.discount_percent}%
-                      </span>
+                      <span className="text-xl text-gray-400 line-through">{formatPrice(product.price)}</span>
+                      <span className="bg-red-600 text-white text-sm font-bold px-3 py-1 rounded-full">-{product.discount_percent}%</span>
                     </div>
                   ) : (
-                    <span className="text-3xl font-bold text-gray-900">
-                      {formatPrice(product.price)}
-                    </span>
+                    <span className="text-3xl font-bold text-gray-900">{formatPrice(product.price)}</span>
                   )}
                 </div>
 
@@ -272,15 +244,8 @@ const ProductDetailPage = () => {
                 {product.sizes && product.sizes.length > 0 && (
                   <div className="mb-6">
                     <div className="flex justify-between items-center mb-2">
-                      <label className="block text-sm font-medium text-gray-700">
-                        Выберите размер *
-                      </label>
-                      <button
-                        onClick={() => setShowSizeTable(true)}
-                        className="text-sm text-blue-600 hover:text-blue-800 underline"
-                      >
-                        Таблица размеров
-                      </button>
+                      <label className="block text-sm font-medium text-gray-700">Выберите размер *</label>
+                      <button onClick={() => setShowSizeTable(true)} className="text-sm text-blue-600 hover:text-blue-800 underline">Таблица размеров</button>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {product.sizes.map((size) => (
@@ -306,34 +271,13 @@ const ProductDetailPage = () => {
 
                 {/* Quantity */}
                 <div className="mb-6">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Количество
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Количество</label>
                   <div className="flex items-center gap-3">
-                    <button
-                      onClick={() => quantity > 1 && setQuantity(quantity - 1)}
-                      className="w-10 h-10 border border-gray-300 rounded hover:bg-gray-50"
-                    >
-                      -
-                    </button>
-                    <input
-                      type="number"
-                      value={quantity}
-                      onChange={handleQuantityChange}
-                      min="1"
-                      max={selectedSize?.stock || 10}
-                      className="w-20 text-center px-2 py-2 border border-gray-300 rounded"
-                    />
-                    <button
-                      onClick={() => setQuantity(quantity + 1)}
-                      className="w-10 h-10 border border-gray-300 rounded hover:bg-gray-50"
-                    >
-                      +
-                    </button>
+                    <button onClick={() => quantity > 1 && setQuantity(quantity - 1)} className="w-10 h-10 border border-gray-300 rounded hover:bg-gray-50">-</button>
+                    <input type="number" value={quantity} onChange={handleQuantityChange} min="1" max={selectedSize?.stock || 10} className="w-20 text-center px-2 py-2 border border-gray-300 rounded" />
+                    <button onClick={() => setQuantity(quantity + 1)} className="w-10 h-10 border border-gray-300 rounded hover:bg-gray-50">+</button>
                   </div>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {selectedSize?.stock || 0} товаров доступно
-                  </p>
+                  <p className="text-sm text-gray-500 mt-1">{selectedSize?.stock || 0} товаров доступно</p>
                 </div>
 
                 {/* Add to Cart Button */}
@@ -356,51 +300,27 @@ const ProductDetailPage = () => {
               <h2 className="text-2xl font-bold text-gray-900 mb-6">Вам также может понравиться</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 {relatedProducts.map((related) => (
-                  <div
-                    key={related.id}
-                    className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition relative"
-                  >
-                    {/* Бейдж со скидкой для связанных товаров */}
+                  <div key={related.id} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition relative">
                     {related.discount_percent > 0 && (
                       <div className="absolute top-2 right-2 z-10">
-                        <div className="bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full">
-                          -{related.discount_percent}%
-                        </div>
+                        <div className="bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full">-{related.discount_percent}%</div>
                       </div>
                     )}
-
                     <Link to={`/product/${related.slug}`}>
-                      <img
-                        src={getImageUrl(related.image_url)}
-                        alt={related.name}
-                        className="w-full h-48 object-cover hover:scale-105 transition duration-300"
-                        onError={(e) => {
-                          e.target.src = 'https://placehold.co/300x400/e5e7eb/9ca3af?text=No+Image';
-                        }}
-                      />
+                      <img src={getImageUrl(related.image_url)} alt={related.name} className="w-full h-48 object-cover hover:scale-105 transition duration-300" onError={(e) => { e.target.src = 'https://placehold.co/300x400/e5e7eb/9ca3af?text=No+Image'; }} />
                     </Link>
                     <div className="p-4">
                       <Link to={`/product/${related.slug}`}>
-                        <h3 className="font-semibold text-gray-900 hover:text-gray-600 transition line-clamp-2 min-h-[56px]">
-                          {related.name}
-                        </h3>
+                        <h3 className="font-semibold text-gray-900 hover:text-gray-600 transition line-clamp-2 min-h-[56px]">{related.name}</h3>
                       </Link>
-                      
-                      {/* Цены для связанных товаров */}
                       <div className="mt-2">
                         {related.is_on_sale ? (
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-lg font-bold text-red-600">
-                              {formatPrice(related.sale_price)}
-                            </span>
-                            <span className="text-sm text-gray-400 line-through">
-                              {formatPrice(related.price)}
-                            </span>
+                            <span className="text-lg font-bold text-red-600">{formatPrice(related.sale_price)}</span>
+                            <span className="text-sm text-gray-400 line-through">{formatPrice(related.price)}</span>
                           </div>
                         ) : (
-                          <span className="text-lg font-bold text-gray-900">
-                            {formatPrice(related.price)}
-                          </span>
+                          <span className="text-lg font-bold text-gray-900">{formatPrice(related.price)}</span>
                         )}
                       </div>
                     </div>
@@ -409,6 +329,9 @@ const ProductDetailPage = () => {
               </div>
             </div>
           )}
+
+          {/* Review Section */}
+          <ReviewSection productSlug={product.slug} />
         </div>
       </div>
     </>

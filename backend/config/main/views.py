@@ -1,42 +1,40 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny
-from django.db.models import Q, Case, When, F, Min, Max, DecimalField
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from django.db.models import Q, Case, When, F, Min, Max, DecimalField, Avg, Count
 from django.db import models
 from django.shortcuts import get_object_or_404
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-import logging
 from django.core.mail import send_mail
 from django.conf import settings
-from .models import Subscriber
+from django.utils import timezone
+import logging
 
-from .models import Category, Product, Size
+from .models import Category, Product, Size, Subscriber, Review, Coupon
 from .serializers import (
     CategorySerializer,
     ProductSerializer,
     ProductDetailSerializer,
     FilterParamsSerializer,
-    PaginatedProductSerializer,
-    SizeSerializer
+    SizeSerializer,
+    ReviewSerializer,
+    ReviewCreateSerializer,
+    CouponSerializer,
+    CouponValidateSerializer
 )
 
+logger = logging.getLogger(__name__)
+
+
 def get_all_subcategory_ids(category):
-    """
-    Рекурсивно собирает ID категории и всех её подкатегорий
-    """
     ids = [category.id]
     for child in category.children.all():
         ids.extend(get_all_subcategory_ids(child))
     return ids
 
-logger = logging.getLogger(__name__)
-
 
 class IndexView(APIView):
-    """
-    Главная страница с категориями
-    """
     permission_classes = [AllowAny]
 
     def get(self, request):
@@ -49,33 +47,19 @@ class IndexView(APIView):
         }, status=status.HTTP_200_OK)
     
     def get_featured_products(self, request):
-        """Получить рекомендуемые/популярные товары"""
         featured = Product.objects.filter(is_active=True).order_by('-created_at')[:8]
         return ProductSerializer(featured, many=True, context={'request': request}).data
 
 
 class CatalogView(APIView):
-    """
-    Каталог товаров с фильтрацией, поиском и пагинацией
-    """
     permission_classes = [AllowAny]
 
     def get(self, request):
-
-        print("=" * 50)
-        print("RAW QUERY PARAMS:", request.query_params)
-        print("RAW QUERY PARAMS dict:", dict(request.query_params))
-        print("=" * 50)
-
-        # Валидируем параметры фильтрации
         filter_serializer = FilterParamsSerializer(data=request.query_params)
         if not filter_serializer.is_valid():
-            print("SERIALIZER ERRORS:", filter_serializer.errors)
             return Response(filter_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         filters = filter_serializer.validated_data
-        
-        # Начинаем с базового queryset
         products = Product.objects.filter(is_active=True).select_related('category').prefetch_related('product_sizes__size')
         
         products = products.annotate(
@@ -83,10 +67,10 @@ class CatalogView(APIView):
                 When(is_on_sale=True, then=F('sale_price')),
                 default=F('price'),
                 output_field=DecimalField(max_digits=10, decimal_places=2)
-            )
+            ),
+            average_rating=Avg('reviews__rating', filter=Q(reviews__is_approved=True))
         )
 
-        # Фильтрация по категории
         category_slug = filters.get('category')
         current_category = None
 
@@ -98,20 +82,16 @@ class CatalogView(APIView):
                 category_ids = get_all_subcategory_ids(current_category)
                 products = products.filter(category_id__in=category_ids)
         
-        # Поиск по названию и описанию
         query = filters.get('q', '')
         if query:
             products = products.filter(
-                Q(name__icontains=query) | 
-                Q(description__icontains=query)
+                Q(name__icontains=query) | Q(description__icontains=query)
             )
         
-        # Фильтрация по цвету
         color = filters.get('color')
         if color:
             products = products.filter(color__iexact=color)
         
-        # Фильтрация по цене (с учётом скидки)
         min_price = filters.get('min_price')
         max_price = filters.get('max_price')
         
@@ -120,31 +100,23 @@ class CatalogView(APIView):
         if max_price is not None:
             products = products.filter(effective_price__lte=max_price)
         
-        # Фильтрация по размеру
         size = filters.get('size')
         if size:
-            # Находим все ProductSize с нужным размером и остатком > 0
-            # Затем получаем уникальные товары, у которых есть хотя бы один такой размер
             products = products.filter(
                 product_sizes__size__name__iexact=size,
-                product_sizes__stock__gt=0  # ← ГЛАВНОЕ: только размеры в наличии
+                product_sizes__stock__gt=0
             ).distinct()
-                    
-        # Сортировка
+        
         sort = filters.get('sort')
-        if sort:
-            if sort == 'price_asc':
-                products = products.order_by('effective_price')  
-            elif sort == 'price_desc':
-                products = products.order_by('-effective_price')  
-            elif sort == 'name_asc':
-                products = products.order_by('name')
-            else:  # newest
-                products = products.order_by('-created_at')
+        if sort == 'price_asc':
+            products = products.order_by('effective_price')  
+        elif sort == 'price_desc':
+            products = products.order_by('-effective_price')  
+        elif sort == 'name_asc':
+            products = products.order_by('name')
         else:
             products = products.order_by('-created_at')
         
-        # Пагинация
         page = filters.get('page', 1)
         page_size = filters.get('page_size', 20)
         
@@ -157,22 +129,16 @@ class CatalogView(APIView):
         except EmptyPage:
             products_page = paginator.page(paginator.num_pages)
         
-        # Сериализуем результаты
         products_serializer = ProductSerializer(
-            products_page, 
-            many=True, 
-            context={'request': request}
+            products_page, many=True, context={'request': request}
         )
         
-        # Получаем все доступные размеры для фильтра
         all_sizes = Size.objects.all()
         sizes_serializer = SizeSerializer(all_sizes, many=True)
         
-        # Получаем все категории
         categories = Category.objects.all()
         categories_serializer = CategorySerializer(categories, many=True)
         
-        # Формируем ответ
         response_data = {
             'products': products_serializer.data,
             'pagination': {
@@ -196,19 +162,9 @@ class CatalogView(APIView):
             'search_query': query
         }
         
-        # Добавляем флаги для UI (если нужно)
-        if filters.get('show_filters'):
-            response_data['show_filters'] = True
-        if filters.get('show_search'):
-            response_data['show_search'] = True
-        if filters.get('reset_search'):
-            response_data['reset_search'] = True
-        
         return Response(response_data, status=status.HTTP_200_OK)
     
     def get_price_range(self):
-        """Получить диапазон цен для фильтра (с учётом скидок)"""
-        
         price_stats = Product.objects.filter(is_active=True).annotate(
             effective_price=Case(
                 When(is_on_sale=True, then=F('sale_price')),
@@ -220,42 +176,25 @@ class CatalogView(APIView):
             max_price=Max('effective_price')
         )
         
-        min_price = price_stats['min_price']
-        max_price = price_stats['max_price']
-        
         return {
-            'min': float(min_price) if min_price else 0,
-            'max': float(max_price) if max_price else 1000
+            'min': float(price_stats['min_price']) if price_stats['min_price'] else 0,
+            'max': float(price_stats['max_price']) if price_stats['max_price'] else 1000
         }
 
 
 class ProductDetailView(APIView):
-    """
-    Детальная страница товара
-    """
     permission_classes = [AllowAny]
 
     def get(self, request, slug):
         product = get_object_or_404(Product, slug=slug, is_active=True)
         
-        # Получаем связанные товары
         related_products = Product.objects.filter(
-            category=product.category,
-            is_active=True
+            category=product.category, is_active=True
         ).exclude(id=product.id)[:4]
         
-        # Сериализуем данные
-        product_serializer = ProductDetailSerializer(
-            product, 
-            context={'request': request}
-        )
-        related_serializer = ProductSerializer(
-            related_products, 
-            many=True, 
-            context={'request': request}
-        )
+        product_serializer = ProductDetailSerializer(product, context={'request': request})
+        related_serializer = ProductSerializer(related_products, many=True, context={'request': request})
         
-        # Получаем все категории для навигации
         categories = Category.objects.all()
         categories_serializer = CategorySerializer(categories, many=True)
         
@@ -268,39 +207,25 @@ class ProductDetailView(APIView):
 
 
 class CategoryListView(APIView):
-    """
-    Список всех категорий
-    """
     permission_classes = [AllowAny]
 
     def get(self, request):
-        # Получаем только корневые категории (без родителей)
         root_categories = Category.objects.filter(parent__isnull=True).order_by('id')
         serializer = CategorySerializer(root_categories, many=True)
-        
-        return Response({
-            'categories': serializer.data
-        }, status=status.HTTP_200_OK)
+        return Response({'categories': serializer.data}, status=status.HTTP_200_OK)
 
 
 class SearchSuggestionsView(APIView):
-    """
-    Поисковые подсказки (автокомплит)
-    """
     permission_classes = [AllowAny]
 
     def get(self, request):
         query = request.query_params.get('q', '').strip()
         
         if not query or len(query) < 2:
-            return Response({
-                'suggestions': []
-            }, status=status.HTTP_200_OK)
+            return Response({'suggestions': []}, status=status.HTTP_200_OK)
         
-        # Ищем товары по названию
         products = Product.objects.filter(
-            Q(name__icontains=query) |
-            Q(description__icontains=query),
+            Q(name__icontains=query) | Q(description__icontains=query),
             is_active=True
         )[:10]
         
@@ -315,10 +240,8 @@ class SearchSuggestionsView(APIView):
                 'type': 'product'
             })
         
-        # Ищем категории
         categories = Category.objects.filter(
-            Q(name__icontains=query) |
-            Q(description__icontains=query)
+            Q(name__icontains=query) | Q(description__icontains=query)
         )[:5]
         
         for category in categories:
@@ -329,22 +252,14 @@ class SearchSuggestionsView(APIView):
                 'type': 'category'
             })
         
-        return Response({
-            'suggestions': suggestions[:10],
-            'query': query
-        }, status=status.HTTP_200_OK)
+        return Response({'suggestions': suggestions[:10], 'query': query}, status=status.HTTP_200_OK)
 
 
 class FilterOptionsView(APIView):
-    """
-    Получение доступных опций для фильтрации
-    """
     permission_classes = [AllowAny]
 
     def get(self, request):
-        # Получаем уникальные значения для фильтров
         colors = Product.objects.filter(is_active=True).exclude(color__isnull=True).exclude(color='').values_list('color', flat=True).distinct()
-        # Только размеры, которые есть в наличии (stock > 0)
         sizes = Size.objects.filter(
             product_sizes__stock__gt=0,
             product_sizes__product__is_active=True
@@ -363,36 +278,28 @@ class FilterOptionsView(APIView):
                 'max': float(price_range['max_price']) if price_range['max_price'] else 1000
             }
         }, status=status.HTTP_200_OK)
-    
+
 
 class SubscribeView(APIView):
-    """
-    Подписка на рассылку
-    """
     permission_classes = [AllowAny]
     
     def post(self, request):
         email = request.data.get('email')
-        
         if not email:
             return Response({'error': 'Email is required'}, status=status.HTTP_400_BAD_REQUEST)
         
-        # Проверяем, не подписан ли уже пользователь
         subscriber, created = Subscriber.objects.get_or_create(
             email=email,
             defaults={'is_active': True}
         )
         
         if not created and subscriber.is_active:
-            return Response({
-                'message': 'Вы уже подписаны на нашу рассылку!'
-            }, status=status.HTTP_200_OK)
+            return Response({'message': 'Вы уже подписаны на нашу рассылку!'}, status=status.HTTP_200_OK)
         
         if not created and not subscriber.is_active:
             subscriber.is_active = True
             subscriber.save()
         
-        # Отправляем приветственное письмо
         try:
             subject = 'Добро пожаловать в рассылку Mark Tailor!'
             message = f'''Здравствуйте!
@@ -405,25 +312,161 @@ class SubscribeView(APIView):
 • Специальных предложениях
 • Стильных образах
 
-Вы всегда можете отписаться от рассылки, перейдя по ссылке в любом нашем письме.
-
 С уважением,
-Команда Mark Tailor
-'''
+Команда Mark Tailor'''
             
-            send_mail(
-                subject,
-                message,
-                'info@marktailor.com',
-                [email],
-                fail_silently=False,
-            )
+            send_mail(subject, message, 'info@marktailor.com', [email], fail_silently=False)
             
-            return Response({
-                'message': 'Спасибо за подписку! Проверьте вашу почту.'
-            }, status=status.HTTP_200_OK)
-            
+            return Response({'message': 'Спасибо за подписку! Проверьте вашу почту.'}, status=status.HTTP_200_OK)
         except Exception as e:
+            return Response({'error': 'Не удалось отправить письмо. Пожалуйста, попробуйте позже.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ==================== ОТЗЫВЫ ====================
+
+class ProductReviewListView(APIView):
+    permission_classes = [AllowAny]
+    
+    def get(self, request, slug):
+        product = get_object_or_404(Product, slug=slug, is_active=True)
+        reviews = Review.objects.filter(product=product, is_approved=True)
+        
+        rating_stats = reviews.aggregate(
+            avg_rating=Avg('rating'),
+            total_reviews=Count('id'),
+            rating_5=Count('rating', filter=Q(rating=5)),
+            rating_4=Count('rating', filter=Q(rating=4)),
+            rating_3=Count('rating', filter=Q(rating=3)),
+            rating_2=Count('rating', filter=Q(rating=2)),
+            rating_1=Count('rating', filter=Q(rating=1)),
+        )
+        
+        serializer = ReviewSerializer(reviews, many=True, context={'request': request})
+        
+        return Response({
+            'reviews': serializer.data,
+            'stats': {
+                'average_rating': float(rating_stats['avg_rating'] or 0),
+                'total_reviews': rating_stats['total_reviews'],
+                'distribution': {
+                    5: rating_stats['rating_5'],
+                    4: rating_stats['rating_4'],
+                    3: rating_stats['rating_3'],
+                    2: rating_stats['rating_2'],
+                    1: rating_stats['rating_1'],
+                }
+            }
+        }, status=status.HTTP_200_OK)
+
+
+class ReviewCreateView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, slug):
+        product = get_object_or_404(Product, slug=slug, is_active=True)
+        
+        # Проверяем, не оставлял ли пользователь уже отзыв
+        if Review.objects.filter(product=product, user=request.user).exists():
             return Response({
-                'error': 'Не удалось отправить письмо. Пожалуйста, попробуйте позже.'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                'error': 'You have already reviewed this product'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Передаём product в контекст сериализатора
+        serializer = ReviewCreateSerializer(
+            data=request.data,
+            context={'request': request, 'product': product}  # Добавляем product в контекст
+        )
+        
+        if serializer.is_valid():
+            review = serializer.save()
+            return Response(
+                ReviewSerializer(review, context={'request': request}).data, 
+                status=status.HTTP_201_CREATED
+            )
+        
+        print("Serializer errors:", serializer.errors)  # Для отладки
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ReviewHelpfulView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, review_id):
+        review = get_object_or_404(Review, id=review_id, is_approved=True)
+        review.helpful_count += 1
+        review.save()
+        return Response({'helpful_count': review.helpful_count}, status=status.HTTP_200_OK)
+
+
+class CanReviewView(APIView):
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, slug):
+        product = get_object_or_404(Product, slug=slug, is_active=True)
+        
+        from orders.models import OrderItem
+        has_purchased = OrderItem.objects.filter(
+            order__user=request.user,
+            order__status__in=['delivered', 'completed'],
+            product=product
+        ).exists()
+        
+        has_reviewed = Review.objects.filter(product=product, user=request.user).exists()
+        
+        return Response({
+            'can_review': has_purchased and not has_reviewed,
+            'has_purchased': has_purchased,
+            'has_reviewed': has_reviewed
+        }, status=status.HTTP_200_OK)
+
+
+# ==================== ПРОМОКОДЫ ====================
+
+class ValidateCouponView(APIView):
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        serializer = CouponValidateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        code = serializer.validated_data['code'].upper()
+        cart_total = serializer.validated_data['cart_total']
+        
+        try:
+            coupon = Coupon.objects.get(code=code)
+        except Coupon.DoesNotExist:
+            return Response({'error': 'Промокод не найден'}, status=status.HTTP_404_NOT_FOUND)
+        
+        user = request.user if request.user.is_authenticated else None
+        is_valid, message = coupon.is_valid(user, cart_total)
+        
+        if not is_valid:
+            return Response({'error': message}, status=status.HTTP_400_BAD_REQUEST)
+        
+        discount_amount = coupon.calculate_discount(cart_total)
+        
+        return Response({
+            'valid': True,
+            'code': coupon.code,
+            'discount_type': coupon.discount_type,
+            'discount_value': float(coupon.discount_value),
+            'discount_amount': float(discount_amount),
+            'final_total': float(cart_total - discount_amount),
+            'message': f'Промокод применён! Скидка: {discount_amount:.2f} BYN'
+        }, status=status.HTTP_200_OK)
+
+
+class AvailableCouponsView(APIView):
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        now = timezone.now()
+        coupons = Coupon.objects.filter(
+            is_active=True,
+            valid_from__lte=now,
+            valid_to__gte=now
+        )[:10]
+        
+        serializer = CouponSerializer(coupons, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

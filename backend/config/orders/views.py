@@ -9,6 +9,7 @@ from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 import logging
 import stripe
 from django.conf import settings
+from django.utils import timezone
 
 from .models import Order, OrderItem
 from .serializers import (
@@ -34,13 +35,10 @@ class CheckoutView(APIView):
         cart_mixin = CartMixin()
         cart = cart_mixin.get_cart(request)
         
-        logger.debug(f"Checkout GET: user={request.user.id}, cart_id={cart.id}, "
-                    f"total_items={cart.total_items}, subtotal={cart.subtotal}")
-        
         if cart.total_items == 0:
             return Response({
-                'error': 'Корзина пуста',
-                'message': 'Ваша корзина пуста'
+                'error': 'Cart is empty',
+                'message': 'Your cart is empty'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         cart_items = cart.items.select_related('product', 'product_size__size').order_by('-added_at')
@@ -67,8 +65,6 @@ class CheckoutView(APIView):
                 'product_image': item.product.main_image.url if item.product.main_image else None
             })
         
-        cart_serializer = CartSerializer(cart_data)
-        
         user_data = {
             'first_name': request.user.first_name,
             'last_name': request.user.last_name,
@@ -83,51 +79,100 @@ class CheckoutView(APIView):
         }
         
         return Response({
-            'cart': cart_serializer.data,
+            'cart': cart_data,
             'user_data': user_data,
             'available_payment_providers': ['stripe', 'heleket']
         }, status=status.HTTP_200_OK)
     
     @transaction.atomic
     def post(self, request):
-        """Создать заказ и инициировать оплату"""
+        """Создать заказ ТОЛЬКО из выбранных товаров с учётом промокода"""
         cart_mixin = CartMixin()
         cart = cart_mixin.get_cart(request)
         
-        logger.debug(f"Checkout POST: user={request.user.id}, cart_id={cart.id}, "
-                    f"total_items={cart.total_items}")
+        # Получаем ID выбранных товаров
+        selected_item_ids = request.data.get('selected_items', [])
         
-        if cart.total_items == 0:
+        if not selected_item_ids:
             return Response({
-                'error': 'Корзина пуста',
-                'message': 'Ваша корзина пуста'
+                'error': 'No items selected',
+                'message': 'Пожалуйста, выберите хотя бы один товар для оформления заказа'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        serializer = CheckoutRequestSerializer(
-            data=request.data,
-            context={'request': request}
-        )
+        # Фильтруем выбранные товары
+        selected_items = cart.items.filter(id__in=selected_item_ids)
         
-        if not serializer.is_valid():
-            logger.warning(f"Checkout validation error: {serializer.errors}")
+        if not selected_items.exists():
             return Response({
-                'error': 'Ошибка проверки',
+                'error': 'Selected items not found in cart'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Рассчитываем сумму только для выбранных товаров
+        total_price = sum(item.total_price for item in selected_items)
+        
+        # Проверяем и применяем промокод
+        coupon_code = request.data.get('coupon_code')
+        coupon = None
+        discount_amount = Decimal('0')
+        
+        if coupon_code:
+            from main.models import Coupon
+            try:
+                coupon = Coupon.objects.get(
+                    code=coupon_code.upper(),
+                    is_active=True,
+                    valid_from__lte=timezone.now(),
+                    valid_to__gte=timezone.now()
+                )
+                
+                # Проверка лимита использований
+                if coupon.usage_limit and coupon.used_count >= coupon.usage_limit:
+                    return Response({
+                        'error': 'Coupon usage limit exceeded',
+                        'message': 'Промокод больше недоступен'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Проверка минимальной суммы заказа
+                if total_price < coupon.min_order_amount:
+                    return Response({
+                        'error': f'Minimum order amount for this coupon is {coupon.min_order_amount} BYN',
+                        'message': f'Минимальная сумма заказа для этого промокода: {coupon.min_order_amount} BYN'
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Расчёт скидки
+                if coupon.discount_type == 'percent':
+                    discount_amount = total_price * coupon.discount_value / 100
+                    if coupon.max_discount_amount:
+                        discount_amount = min(discount_amount, coupon.max_discount_amount)
+                else:
+                    discount_amount = min(coupon.discount_value, total_price)
+                
+                total_price -= discount_amount
+                
+            except Coupon.DoesNotExist:
+                return Response({
+                    'error': 'Invalid coupon code',
+                    'message': 'Неверный промокод'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
+        serializer = CheckoutRequestSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({
+                'error': 'Validation error',
                 'details': serializer.errors
             }, status=status.HTTP_400_BAD_REQUEST)
         
         validated_data = serializer.validated_data
-        total_price = cart.subtotal
         delivery_method = validated_data.get('delivery_method', 'pickup')
         
         try:
-            # Создаем заказ
+            # Создаём заказ из выбранных товаров
             order = Order.objects.create(
                 user=request.user,
                 first_name=validated_data['first_name'],
                 last_name=validated_data['last_name'],
                 email=validated_data.get('email') or request.user.email,
                 company=validated_data.get('company', ''),
-                # Адрес сохраняем только для курьерской доставки
                 address1=validated_data.get('address1', '') if delivery_method == 'courier' else '',
                 address2=validated_data.get('address2', '') if delivery_method == 'courier' else '',
                 city=validated_data.get('city', '') if delivery_method == 'courier' else '',
@@ -140,13 +185,18 @@ class CheckoutView(APIView):
                 payment_provider=validated_data['payment_provider'],
             )
             
-            logger.info(f"Order created: order_id={order.id}, delivery_method={delivery_method}")
+            # Привязываем промокод к заказу
+            if coupon:
+                order.coupon = coupon
+                order.discount_amount = discount_amount
+                order.save()
+                coupon.used_count += 1
+                coupon.save()
             
-            # Создаем элементы заказа из корзины
-            for item in cart.items.select_related('product', 'product_size'):
-                logger.debug(f"Creating order item: product={item.product.name}, "
-                           f"size={item.product_size.size.name}, quantity={item.quantity}")
-                
+            logger.info(f"Order created from selected items: order_id={order.id}, items_count={selected_items.count()}, discount={discount_amount}")
+            
+            # Создаём элементы заказа из выбранных товаров
+            for item in selected_items:
                 OrderItem.objects.create(
                     order=order,
                     product=item.product,
@@ -160,18 +210,24 @@ class CheckoutView(APIView):
             
             if payment_provider == 'stripe':
                 try:
-                    logger.info("Создание сессии оформления заказа Stripe")
-                    
                     line_items = []
-                    for item in cart.items.select_related('product', 'product_size'):
+                    for item in selected_items:
                         product_name = f"{item.product.name}"
                         if item.product_size and item.product_size.size:
                             product_name += f" - {item.product_size.size.name}"
                         
-                        # Получаем цену со скидкой
                         price = item.product.sale_price if item.product.is_on_sale else item.product.price
-                        price_in_eur = int(price * Decimal(100) / Decimal(3.5))  # Конвертация BYN → EUR
-
+                        
+                        # Применяем пропорциональную скидку к каждому товару
+                        if discount_amount > 0 and total_price > 0:
+                            item_discount = (price * item.quantity / (total_price + discount_amount)) * discount_amount
+                            discounted_price = price * item.quantity - item_discount
+                            price_per_unit = discounted_price / item.quantity
+                        else:
+                            price_per_unit = price
+                        
+                        price_in_eur = int(price_per_unit * Decimal(100) / Decimal(3.5))
+                        
                         line_items.append({
                             'price_data': {
                                 'currency': 'eur',
@@ -182,12 +238,10 @@ class CheckoutView(APIView):
                             },
                             'quantity': item.quantity,
                         })
-
-                    #  ДОБАВЛЯЕМ СТОИМОСТЬ ДОСТАВКИ
+                    
                     if delivery_method == 'courier':
-                        shipping_cost_byn = 10  # Стоимость доставки в BYN
+                        shipping_cost_byn = 10
                         shipping_cost_cents = int(shipping_cost_byn * 100 / 3.5)
-                        
                         line_items.append({
                             'price_data': {
                                 'currency': 'eur',
@@ -198,7 +252,7 @@ class CheckoutView(APIView):
                             },
                             'quantity': 1,
                         })
-                                
+                    
                     success_url = request.build_absolute_uri('/payment/stripe/success/')
                     cancel_url = request.build_absolute_uri('/payment/stripe/cancel/')
                     
@@ -206,7 +260,7 @@ class CheckoutView(APIView):
                         payment_method_types=['card'],
                         line_items=line_items,
                         mode='payment',
-                        success_url = success_url + '?session_id={CHECKOUT_SESSION_ID}&order_id=' + str(order.id),
+                        success_url=success_url + '?session_id={CHECKOUT_SESSION_ID}&order_id=' + str(order.id),
                         cancel_url=cancel_url + f'?order_id={order.id}',
                         metadata={'order_id': order.id}
                     )
@@ -214,40 +268,31 @@ class CheckoutView(APIView):
                     order.stripe_payment_intent_id = checkout_session.payment_intent
                     order.save()
                     
-                    cart.clear()
+                    # УДАЛЯЕМ ТОЛЬКО ВЫБРАННЫЕ ТОВАРЫ из корзины
+                    selected_items.delete()
+                    
                     checkout_url = checkout_session.url
                     
                 except Exception as e:
-                    logger.error(f"Ошибка при создании сессии Stripe: {str(e)}", exc_info=True)
-                    raise Exception(f"Ошибка обработки платежа: {str(e)}")
+                    logger.error(f"Stripe error: {str(e)}")
+                    raise Exception(f"Payment error: {str(e)}")
             
             elif payment_provider == 'heleket':
-                # Для Heleket просто очищаем корзину
-                logger.info("Выбран способ оплаты при получении.")
-
-                # Списываем товары со склада
-                for item in cart.items.select_related('product', 'product_size'):
+                # Списываем выбранные товары со склада
+                for item in selected_items:
                     product = item.product
                     product_size = item.product_size
                     
-                    # Уменьшаем общий остаток товара
                     if product.stock >= item.quantity:
                         product.stock -= item.quantity
                         product.save()
-                        logger.info(f"Товар '{product.name}': остаток уменьшен на {item.quantity}, новый остаток: {product.stock}")
-                    else:
-                        logger.warning(f"Недостаточно товара '{product.name}' на складе! Требуется: {item.quantity}, доступно: {product.stock}")
                     
-                    # Уменьшаем остаток конкретного размера
                     if product_size.stock >= item.quantity:
                         product_size.stock -= item.quantity
                         product_size.save()
-                        logger.info(f"Размер '{product_size.size.name}': остаток уменьшен на {item.quantity}, новый остаток: {product_size.stock}")
-                    else:
-                        logger.warning(f"Недостаточно размера '{product_size.size.name}'! Требуется: {item.quantity}, доступно: {product_size.stock}")
-
-                 # Очищаем корзину
-                cart.clear()
+                
+                # УДАЛЯЕМ ТОЛЬКО ВЫБРАННЫЕ ТОВАРЫ из корзины
+                selected_items.delete()
                 checkout_url = None
             
             order_serializer = OrderSerializer(order)
@@ -263,7 +308,7 @@ class CheckoutView(APIView):
             return Response(response_data, status=status.HTTP_201_CREATED)
             
         except Exception as e:
-            logger.error(f"Error during checkout: {str(e)}", exc_info=True)
+            logger.error(f"Checkout error: {str(e)}")
             return Response({
                 'error': 'Checkout failed',
                 'message': str(e)
@@ -280,7 +325,7 @@ class OrderListView(APIView):
         
         try:
             page_size = int(page_size)
-            page_size = min(page_size, 50)  # Ограничиваем максимум 50 заказов на страницу
+            page_size = min(page_size, 50)
         except (TypeError, ValueError):
             page_size = 10
         
@@ -308,6 +353,7 @@ class OrderListView(APIView):
                 'has_previous': orders_page.has_previous(),
             }
         }, status=status.HTTP_200_OK)
+
 
 class OrderDetailView(APIView):
     """Детальная информация о заказе"""

@@ -39,7 +39,7 @@ class OrderSerializer(serializers.ModelSerializer):
         status_map = dict(Order.STATUS_CHOICES)
         return status_map.get(obj.status, obj.status)
     
-    def get_payment_method_display(self, obj):  # 👈 ДОБАВИТЬ
+    def get_payment_method_display(self, obj):  # ДОБАВИТЬ
         """Возвращает человекочитаемое название способа оплаты"""
         if obj.payment_provider == 'heleket':
             return 'Оплата при получении'
