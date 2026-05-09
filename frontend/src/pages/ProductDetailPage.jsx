@@ -88,20 +88,15 @@ const ProductDetailPage = () => {
   };
 
   const handleAddToCart = async () => {
-    if (!selectedSize) {
-      alert("Пожалуйста, выберите размер");
-      return;
-    }
+  if (!selectedSize) {
+    alert("Пожалуйста, выберите размер");
+    return;
+  }
 
-    setAddingToCart(true);
-    const result = await addToCart(product.slug, selectedSize.id, quantity);
-    if (result.success) {
-      alert(`${product.name} добавлен в корзину!`);
-    } else {
-      alert(result.error || "Не удалось добавить в корзину");
-    }
-    setAddingToCart(false);
-  };
+  setAddingToCart(true);
+  const result = await addToCart(product.slug, selectedSize.id, quantity);
+  setAddingToCart(false);
+};
 
   const getCurrentPrice = () => {
     if (product?.is_on_sale) {

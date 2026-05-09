@@ -152,7 +152,7 @@ class AddToCartView(APIView, CartMixin):
             product_size = product.product_sizes.filter(stock__gt=0).first()
             if not product_size:
                 return Response({
-                    'error': 'No sizes available for this product'
+                    'error': 'Нет доступных размеров для этого товара'
                 }, status=status.HTTP_400_BAD_REQUEST)
         
          # Получаем существующий товар в корзине
@@ -171,7 +171,7 @@ class AddToCartView(APIView, CartMixin):
         if total_quantity > product_size.stock:
             available = product_size.stock - (existing_item.quantity if existing_item else 0)
             return Response({
-                'error': f'Cannot add {quantity} items. Only {available} more available.'
+                'error': f'Не удалось добавит {quantity} шт. Доступно только {available} шт.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Добавляем товар в корзину

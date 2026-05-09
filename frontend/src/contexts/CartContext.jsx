@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { cartAPI } from '../api/cart';
+import Toast from '../components/Toast';
 
 const CartContext = createContext();
 
@@ -9,6 +10,15 @@ export const CartProvider = ({ children }) => {
   const [cart, setCart] = useState(null);
   const [cartCount, setCartCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState(null);
+
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+  };
+
+  const hideToast = () => {
+    setToast(null);
+  };
 
   const fetchCart = async () => {
     try {
@@ -22,7 +32,6 @@ export const CartProvider = ({ children }) => {
     }
   };
 
-  // Слушаем событие обновления корзины
   useEffect(() => {
     fetchCart();
     
@@ -35,25 +44,25 @@ export const CartProvider = ({ children }) => {
     return () => window.removeEventListener('cart-updated', handleCartUpdate);
   }, []);
 
-  // Загружаем корзину для всех пользователей (включая неавторизованных)
   useEffect(() => {
     fetchCart();
   }, []);
 
-  // Исправленная функция addToCart
   const addToCart = async (slug, sizeId, quantity) => {
     try {
       const response = await cartAPI.addToCart(slug, { size_id: sizeId, quantity });
-      console.log('Add to cart response:', response.data);
       setCart(response.data.cart);
       setCartCount(response.data.total_items);
       
+      showToast('Товар успешно добавлен в корзину!', 'success');
+      
       return { success: true, data: response.data };
     } catch (error) {
-      console.error('Add to cart error:', error);
+      const errorMessage = error.response?.data?.error || 'Не удалось добавить товар в корзину';
+      showToast(errorMessage, 'error');
       return { 
         success: false, 
-        error: error.response?.data?.error || 'Failed to add to cart' 
+        error: errorMessage
       };
     }
   };
@@ -77,6 +86,7 @@ export const CartProvider = ({ children }) => {
       const response = await cartAPI.removeCartItem(itemId);
       setCart(response.data.cart);
       setCartCount(response.data.cart.total_items);
+      showToast('Товар удалён из корзины', 'success');
       return { success: true };
     } catch (error) {
       return { 
@@ -91,6 +101,7 @@ export const CartProvider = ({ children }) => {
       const response = await cartAPI.clearCart();
       setCart(response.data.cart);
       setCartCount(0);
+      showToast('Корзина очищена', 'success');
       return { success: true };
     } catch (error) {
       return { 
@@ -114,6 +125,13 @@ export const CartProvider = ({ children }) => {
   return (
     <CartContext.Provider value={value}>
       {children}
+      {toast && (
+        <Toast 
+          message={toast.message} 
+          type={toast.type} 
+          onClose={hideToast} 
+        />
+      )}
     </CartContext.Provider>
   );
 };
