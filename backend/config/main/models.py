@@ -347,7 +347,7 @@ class Review(models.Model):
         ]
 
     def __str__(self):
-        return f"Review by {self.user.email} for {self.product.name} - {self.rating}★"
+        return f"Отзыв от {self.user.email} на {self.product.name} - {self.rating}★"
 
 
 class Coupon(models.Model):

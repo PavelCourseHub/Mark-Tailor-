@@ -104,6 +104,23 @@ class ReviewAdmin(admin.ModelAdmin):
     list_editable = ('is_approved',)
     readonly_fields = ('user', 'product', 'rating', 'comment', 'helpful_count', 'created_at')
     
+    fieldsets = (
+        ('Информация об отзыве', {
+            'fields': ('product', 'user', 'rating', 'comment')
+        }),
+        ('Фото', {
+            'fields': ('image',),
+            'classes': ('collapse',)
+        }),
+        ('Статусы', {
+            'fields': ('is_verified_purchase', 'is_approved', 'helpful_count')
+        }),
+        ('Дата', {
+            'fields': ('created_at',),
+            'classes': ('collapse',)
+        }),
+    )
+
     actions = ['approve_reviews', 'unapprove_reviews']
     
     def approve_reviews(self, request, queryset):
