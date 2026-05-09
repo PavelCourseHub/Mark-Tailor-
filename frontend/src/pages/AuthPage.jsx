@@ -23,7 +23,7 @@ const AuthPage = () => {
       {/* Left decorative panel */}
       <div className="hidden lg:flex lg:w-1/2 bg-black items-center justify-center p-12">
         <div className="text-white text-center space-y-6">
-          <h1 className="font-serif text-5xl font-bold tracking-tight">
+          <h1 className="font-serif text-5xl font-bold tracking-tight text-white">
             Mark Tailor
           </h1>
           <p className="text-lg opacity-80 max-w-sm mx-auto font-light">
