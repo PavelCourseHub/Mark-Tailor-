@@ -30,6 +30,7 @@ const OrderDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [cancelling, setCancelling] = useState(false);
+  const [selectedProductSlug, setSelectedProductSlug] = useState(null);
 
   useEffect(() => {
     fetchOrderDetail();
@@ -41,7 +42,17 @@ const OrderDetailPage = () => {
     
     try {
       const response = await ordersAPI.getOrderDetail(orderId);
+      console.log("Order data:", response.data); // Для отладки
       setOrder(response.data);
+      
+      // Устанавливаем первый товар как выбранный по умолчанию
+      if (response.data.items && response.data.items.length > 0) {
+        const firstItem = response.data.items[0];
+        // Пытаемся получить slug из разных полей
+        const slug = firstItem.product_slug || firstItem.product?.slug;
+        console.log("First product slug:", slug); // Для отладки
+        setSelectedProductSlug(slug);
+      }
     } catch (err) {
       console.error("Ошибка при получении сведений о заказе:", err);
       setError("Не удалось загрузить данные заказа. Пожалуйста, попробуйте еще раз.");
@@ -72,7 +83,6 @@ const OrderDetailPage = () => {
     return `${Math.round(price)} BYN`;
   };
 
-  // ✅ РУССКАЯ ЛОКАЛИЗАЦИЯ ДАТЫ
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString("ru-RU", {
       year: "numeric",
@@ -83,7 +93,6 @@ const OrderDetailPage = () => {
     });
   };
 
-  // ✅ ПОЛУЧЕНИЕ ОТОБРАЖАЕМОГО НАЗВАНИЯ СПОСОБА ОПЛАТЫ
   const getPaymentMethodDisplay = (provider) => {
     if (provider === 'heleket') return 'Оплата при получении';
     if (provider === 'stripe') return 'Банковская карта';
@@ -91,7 +100,6 @@ const OrderDetailPage = () => {
     return provider || 'Не указан';
   };
 
-  // ✅ ПОЛУЧЕНИЕ ОТОБРАЖАЕМОГО СТАТУСА ПЛАТЕЖА
   const getPaymentStatusDisplay = (orderStatus, paymentProvider) => {
     if (orderStatus === 'cancelled') return 'Возврат';
     if (orderStatus === 'delivered') return 'Оплачен';
@@ -109,6 +117,11 @@ const OrderDetailPage = () => {
     const status = order?.status;
     if (status === "cancelled" || status === "failed") return 0;
     return STATUS_MAP[status]?.step || 1;
+  };
+
+  // Функция для получения slug товара (из разных возможных полей)
+  const getProductSlug = (item) => {
+    return item.product_slug || item.product?.slug || item.product?.product_slug;
   };
 
   if (loading) {
@@ -188,7 +201,6 @@ const OrderDetailPage = () => {
           <div className="bg-white rounded-lg shadow-md p-6 mb-6">
             <h2 className="font-semibold text-gray-900 mb-6">Статус заказа</h2>
             <div className="relative">
-              {/* Progress Bar - с границей в конце */}
               <div className="absolute top-5 left-0 w-full h-1 bg-gray-200 rounded-full overflow-visible">
                 <div
                   className="h-full bg-green-500 transition-all duration-500 rounded-full"
@@ -200,7 +212,6 @@ const OrderDetailPage = () => {
                 />
               </div>
               
-              {/* Steps */}
               <div className="relative flex justify-between">
                 {ORDER_STEPS.map((step, index) => {
                   const stepNumber = index + 1;
@@ -236,42 +247,42 @@ const OrderDetailPage = () => {
             <div className="bg-white rounded-lg shadow-md p-6">
               <h2 className="font-semibold text-gray-900 mb-4">Заказ товаров</h2>
               <div className="space-y-4">
-                {order.items?.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="flex gap-4 pb-4 border-b border-gray-100 last:border-0 last:pb-0"
-                  >
-                    {/* Product Image */}
-                    <div className="w-20 h-24 bg-gray-100 rounded flex items-center justify-center">
-                      <span className="text-2xl">👕</span>
-                    </div>
-                    
-                    {/* Product Info */}
-                    <div className="flex-1">
-                      <Link
-                        to={`/product/${item.product_slug || "#"}`}
-                        className="font-medium text-gray-900 hover:text-gray-600 transition"
-                      >
-                        {item.product_name}
-                      </Link>
-                      <div className="text-sm text-gray-500 mt-1">
-                        <span>Размер: {item.size_name}</span>
-                        <span className="mx-2">•</span>
-                        <span>Количество: {item.quantity}</span>
+                {order.items?.map((item, idx) => {
+                  const productSlug = getProductSlug(item);
+                  return (
+                    <div
+                      key={idx}
+                      className="flex gap-4 pb-4 border-b border-gray-100 last:border-0 last:pb-0"
+                    >
+                      <div className="w-20 h-24 bg-gray-100 rounded flex items-center justify-center">
+                        <span className="text-2xl">👕</span>
                       </div>
-                      <div className="text-sm text-gray-500">
-                        Цена: {formatPrice(item.price)} каждый
+                      
+                      <div className="flex-1">
+                        <Link
+                          to={productSlug ? `/product/${productSlug}` : "#"}
+                          className="font-medium text-gray-900 hover:text-gray-600 transition"
+                        >
+                          {item.product_name}
+                        </Link>
+                        <div className="text-sm text-gray-500 mt-1">
+                          <span>Размер: {item.size_name}</span>
+                          <span className="mx-2">•</span>
+                          <span>Количество: {item.quantity}</span>
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          Цена: {formatPrice(item.price)} каждый
+                        </div>
+                      </div>
+                      
+                      <div className="text-right">
+                        <p className="font-semibold text-gray-900">
+                          {formatPrice(item.total_price || item.price * item.quantity)}
+                        </p>
                       </div>
                     </div>
-                    
-                    {/* Total */}
-                    <div className="text-right">
-                      <p className="font-semibold text-gray-900">
-                        {formatPrice(item.total_price || item.price * item.quantity)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -340,16 +351,45 @@ const OrderDetailPage = () => {
               </div>
             )}
 
-            {/* Support Card */}
-            <div className="bg-gray-100 rounded-lg p-6 text-center">
-              <p className="text-gray-600 mb-2">Нужна помощь с оформлением заказа?</p>
-              <Link
-                to="/contact"
-                className="text-black font-semibold hover:underline"
-              >
-                Обратиться в службу поддержки →
-              </Link>
-            </div>
+            {/* Review Button - с выбором товара из выпадающего списка */}
+            {order.status === "completed" && order.items?.length > 0 && (
+              <div className="bg-green-50 rounded-lg p-6 text-center border border-green-200">
+                <div className="text-4xl mb-3">⭐</div>
+                <p className="text-gray-800 font-medium mb-3">
+                  Понравился заказ? Поделитесь впечатлениями!
+                </p>
+                
+                {order.items?.length > 1 && (
+                  <select
+                    value={selectedProductSlug || getProductSlug(order.items[0])}
+                    onChange={(e) => setSelectedProductSlug(e.target.value)}
+                    className="mb-3 px-3 py-2 border border-gray-300 rounded text-sm w-full max-w-xs mx-auto block"
+                  >
+                    {order.items.map((item) => {
+                      const slug = getProductSlug(item);
+                      return (
+                        <option key={item.id} value={slug}>
+                          {item.product_name} ({item.size_name})
+                        </option>
+                      );
+                    })}
+                  </select>
+                )}
+                
+                <Link
+                  to={`/product/${selectedProductSlug || getProductSlug(order.items[0])}`}
+                  className="inline-block px-6 py-3 bg-black text-white rounded-lg font-semibold hover:bg-gray-800 transition"
+                >
+                  ✍️ Оставить отзыв
+                </Link>
+                
+                {order.items?.length > 1 && (
+                  <p className="text-xs text-gray-500 mt-3">
+                    Выберите товар, на который хотите оставить отзыв
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

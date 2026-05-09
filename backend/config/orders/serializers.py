@@ -6,13 +6,14 @@ from decimal import Decimal
 
 class OrderItemSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
+    product_slug = serializers.SlugField(source='product.slug', read_only=True)
     product_price = serializers.DecimalField(source='product.price', max_digits=10, decimal_places=2, read_only=True)
     size_name = serializers.CharField(source='size.size.name', read_only=True)
     total_price = serializers.SerializerMethodField()
     
     class Meta:
         model = OrderItem
-        fields = ('id', 'product', 'product_name', 'size', 'size_name', 
+        fields = ('id', 'product', 'product_name', 'product_slug', 'size', 'size_name', 
                   'quantity', 'price', 'product_price', 'total_price')
         read_only_fields = ('id', 'price')
     
