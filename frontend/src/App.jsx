@@ -20,6 +20,7 @@ import PasswordResetConfirm from './pages/PasswordResetConfirm';
 import OrderConfirmationPage from './pages/OrderConfirmationPage';
 import AboutPage from './pages/AboutPage';
 import FaqPage from './pages/FaqPage';
+import ScrollToTop from './components/ScrollToTop';
 
 
 // Импорт компонентов
@@ -99,6 +100,7 @@ function App() {
             </main>
             <Footer />
           </div>
+          <ScrollToTop />
         </CartProvider>
       </AuthProvider>
     </Router>

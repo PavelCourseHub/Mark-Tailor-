@@ -19,7 +19,7 @@ const Footer = () => {
             <div>
               <h3 className="text-lg font-semibold mb-4">Mark Tailor</h3>
               <p className="text-gray-400 text-sm">
-                Одежда премиум-класса, сшитая специально для вас. Качество и стиль с 2024 года.
+                Одежда премиум-класса, сшитая специально для вас. Качество и стиль.
               </p>
             </div>
 
@@ -57,16 +57,6 @@ const Footer = () => {
                     Часто задаваемые вопросы
                   </Link>
                 </li>
-                <li>
-                  <Link to="/shipping" className="text-gray-400 hover:text-white transition">
-                    Информация о доставке
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/returns" className="text-gray-400 hover:text-white transition">
-                    Возврат
-                  </Link>
-                </li>
               </ul>
             </div>
 
@@ -98,7 +88,7 @@ const Footer = () => {
           </div>
 
           <div className="border-t border-gray-800 mt-8 pt-8 text-center text-sm text-gray-400">
-            <p>&copy; 2025 Mark Tailor. Все права защищены.</p>
+            <p>&copy; Mark Tailor. Все права защищены.</p>
           </div>
         </div>
       </footer>
