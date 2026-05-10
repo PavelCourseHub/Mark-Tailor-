@@ -19,6 +19,8 @@ import PaymentCancel from './pages/PaymentCancel';
 import PasswordResetConfirm from './pages/PasswordResetConfirm';
 import OrderConfirmationPage from './pages/OrderConfirmationPage';
 import AboutPage from './pages/AboutPage';
+import FaqPage from './pages/FaqPage';
+
 
 // Импорт компонентов
 import Header from './components/Header';
@@ -77,6 +79,7 @@ function App() {
                 <Route path="/payment/cancel" element={<PaymentCancel />} />
                 <Route path="/password-reset/confirm/:uidb64/:token" element={<PasswordResetConfirm />} />
                 <Route path="/about" element={<AboutPage />} />
+                <Route path="/faq" element={<FaqPage />} />
                 {/* Защищенные маршруты (требуют авторизации) */}
                 {/* Раскомментируйте когда создадите эти страницы:
                 
