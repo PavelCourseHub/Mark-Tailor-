@@ -168,3 +168,4 @@ class CouponAdmin(admin.ModelAdmin):
         queryset.update(is_active=False)
         self.message_user(request, f'{queryset.count()} промокодов деактивировано')
     deactivate_coupons.short_description = 'Деактивировать промокоды'
+
